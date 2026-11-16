@@ -150,14 +150,63 @@ export const GRADE_GOLDEN2: GradeParams = {
   tintS: [0.02, 0.002], tintM: [0, 0], tintH: [-0.012, 0.006],
   vig: [0.2, 0.4],
 };
-export const GRADES: Record<"day" | "golden", GradeParams> = { day: GRADE_DAY2, golden: GRADE_GOLDEN2 };
-/** One strength (0..1, the effect's `amount`) per preset. The round-2 presets above are fitted at full strength on the
- *  relit world, so both stay at 1: day lands at median Y' ~.57 and golden ~.52, which is the target. Lower these (and
- *  re-check a still) only if a new preset overshoots again. */
-export const GRADE_STRENGTH: Record<"day" | "golden", number> = { day: 1, golden: 1 };
-/** Apply the preset of a light to the effect (only touches uniforms when the light changes). */
-export function gradeFor(fx: GradeEffect, light: "day" | "golden") {
+
+/** Historical and Atmospheric Color Grade Presets */
+export const GRADE_NIGHT_HEIST: GradeParams = {
+  ky: [0, 0.06, 0.20, 0.48, 0.75, 0.90, 1.0],
+  sat: [0.85, 0.95, 1.10],
+  tintS: [0.025, -0.010], tintM: [-0.005, 0.005], tintH: [-0.015, 0.012],
+  vig: [0.28, 0.35],
+};
+
+export const GRADE_SEPIA_1800S: GradeParams = {
+  ky: [0, 0.11, 0.30, 0.62, 0.84, 0.94, 1.0],
+  sat: [0.65, 0.75, 0.80],
+  tintS: [-0.015, 0.020], tintM: [-0.010, 0.015], tintH: [-0.008, 0.012],
+  vig: [0.22, 0.38],
+};
+
+export const GRADE_OCEAN_MIST: GradeParams = {
+  ky: [0, 0.09, 0.26, 0.56, 0.81, 0.92, 1.0],
+  sat: [0.80, 0.85, 0.90],
+  tintS: [0.018, -0.012], tintM: [0.008, -0.005], tintH: [0.002, 0.0],
+  vig: [0.18, 0.42],
+};
+
+export const GRADE_ARID_DESERT: GradeParams = {
+  ky: [0, 0.08, 0.25, 0.58, 0.85, 0.95, 1.0],
+  sat: [1.05, 1.15, 1.20],
+  tintS: [0.012, 0.015], tintM: [-0.010, 0.018], tintH: [-0.020, 0.015],
+  vig: [0.15, 0.45],
+};
+
+export type GradePreset = "day" | "golden" | "night_heist" | "sepia_1800s" | "ocean_mist" | "arid_desert";
+
+export const GRADES: Record<GradePreset, GradeParams> = {
+  day: GRADE_DAY2,
+  golden: GRADE_GOLDEN2,
+  night_heist: GRADE_NIGHT_HEIST,
+  sepia_1800s: GRADE_SEPIA_1800S,
+  ocean_mist: GRADE_OCEAN_MIST,
+  arid_desert: GRADE_ARID_DESERT,
+};
+
+export const GRADE_STRENGTH: Record<GradePreset, number> = {
+  day: 1.0,
+  golden: 1.0,
+  night_heist: 1.0,
+  sepia_1800s: 1.0,
+  ocean_mist: 1.0,
+  arid_desert: 1.0,
+};
+
+/** Apply the preset of a light/mood to the effect (only touches uniforms when the preset changes). */
+export function gradeFor(fx: GradeEffect, light: GradePreset) {
   const tag = fx as unknown as { _light?: string };
-  if (tag._light !== light) { fx.set(GRADES[light]); tag._light = light; }
-  fx.amount = GRADE_STRENGTH[light];
+  if (tag._light !== light) {
+    const preset = GRADES[light] ?? GRADES.day;
+    fx.set(preset);
+    tag._light = light;
+  }
+  fx.amount = GRADE_STRENGTH[light] ?? 1.0;
 }

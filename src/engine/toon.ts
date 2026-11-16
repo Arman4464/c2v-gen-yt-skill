@@ -1,3 +1,6 @@
+import { solve2BoneIK, computeArmGesture, GestureType } from "./rig";
+export * from "./rig";
+
 // Our own flat 2D cartoon cast (riflemen, officer, townsfolk, kid, parent) + 2D effects, drawn on a canvas.
 // Construction v2 (characters.md, our own cast): superellipse heads (pointed crown 1.75 / full jaw 2.3, chin taper,
 // seeded side bulge + tilt), bean torsos, single-stroke limbs with ink-dot hands, a thick-thin plum outline weighted
@@ -25,13 +28,13 @@ const rad = (d: number) => (d * Math.PI) / 180;
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 export const mul = (c: string, m: C3) => {
   const n = parseInt(c.slice(1), 16);
-  const ch = (v: number, k: number) => Math.min(255, Math.round(v * k)).toString(16).padStart(2, "0");
+  const ch = (v: number, k: number) => Math.max(0, Math.min(255, Math.round(v * k))).toString(16).padStart(2, "0");
   return `#${ch((n >> 16) & 255, m[0])}${ch((n >> 8) & 255, m[1])}${ch(n & 255, m[2])}`;
 };
 export const shade = (c: string, k: number) => mul(c, [k, k, k]);
 export const mix = (a: string, b: string, t: number) => {
   const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16);
-  const ch = (s: number) => Math.round(((A >> s) & 255) * (1 - t) + ((B >> s) & 255) * t).toString(16).padStart(2, "0");
+  const ch = (s: number) => Math.max(0, Math.min(255, Math.round(((A >> s) & 255) * (1 - t) + ((B >> s) & 255) * t))).toString(16).padStart(2, "0");
   return `#${ch(16)}${ch(8)}${ch(0)}`;
 };
 /** deterministic per-character random in [0, 1) */
@@ -431,11 +434,17 @@ const BUILD: Record<Build, { a: number; torso: number; legs: number; tw: number 
   kid: { a: 112, torso: 0.85, legs: 1.0, tw: 0.72 },
 };
 
+export type ArmGestureOpt = GestureType | { gesture?: GestureType; target?: [number, number]; bend?: 'out' | 'in' | 'up' | 'down' };
+
 export type FrontOpts = {
   phase?: number; expr?: Expr; mode?: "march" | "stroll" | "stand" | "sit" | "fall"; look?: number; blink?: boolean | number; lift?: number;
   prop?: Prop; tilt?: number; headTilt?: number; wave?: number;
   /** canvas angle the key light comes FROM (painted crescent + thick outline side) */
   light?: number; facing?: -1 | 0 | 1; seed?: number;
+  /** Procedural 2-bone IK gestures */
+  leftArm?: ArmGestureOpt;
+  rightArm?: ArmGestureOpt;
+  frame?: number;
 };
 
 const footStroke = (p: Pen, a: P2, b: P2, w: number, col: string) => {
@@ -512,8 +521,41 @@ export const bodyFront = (p: Pen, o: Outfit, opts: FrontOpts) => {
   if (mode === "sit") for (const side of [-1, 1]) arms.push({ pts: [sh(side), [tcx + side * (1.1 * T.a + 6 * u), sh(side)[1] + 0.4 * HH], [tcx + side * (1.2 * T.a + 10 * u), torsoBot + 0.04 * HH]], front: false });
   else if (mode === "fall") for (const side of [-1, 1]) arms.push({ pts: [sh(side), [tcx + side * (1.15 * T.a + 12 * u), sh(side)[1] - 0.25 * HH], [tcx + side * (1.3 * T.a + 24 * u), sh(side)[1] - 0.68 * HH]], front: false });
   else {
-    arms.push({ pts: prop === "shako" ? hang(-1, 0) : hang(-1, -sw), front: false });
-    if (rifle) {
+    const armLen = 0.95 * HH;
+    const torsoW = W * 0.9;
+    const torsoH = Bd.torso * HH;
+
+    if (opts.leftArm) {
+      const gType = typeof opts.leftArm === 'string' ? opts.leftArm : (opts.leftArm.gesture || 'idle');
+      const gTarget = typeof opts.leftArm === 'object' ? opts.leftArm.target : undefined;
+      const gBend = typeof opts.leftArm === 'object' ? opts.leftArm.bend : undefined;
+      const armState = computeArmGesture(gType, sh(-1), armLen, torsoW, torsoH, {
+        frame: opts.frame ?? 0, facing: facing || 1, side: 'left', target: gTarget,
+      });
+      if (gBend) {
+        const ikRes = solve2BoneIK(sh(-1), armState.hand, armLen * 0.52, armLen * 0.48, gBend, -(facing || 1));
+        arms.push({ pts: [sh(-1), ikRes.joint, ikRes.target], front: armState.isFront });
+      } else {
+        arms.push({ pts: [armState.shoulder, armState.elbow, armState.hand], front: armState.isFront });
+      }
+    } else {
+      arms.push({ pts: prop === "shako" ? hang(-1, 0) : hang(-1, -sw), front: false });
+    }
+
+    if (opts.rightArm) {
+      const gType = typeof opts.rightArm === 'string' ? opts.rightArm : (opts.rightArm.gesture || 'idle');
+      const gTarget = typeof opts.rightArm === 'object' ? opts.rightArm.target : undefined;
+      const gBend = typeof opts.rightArm === 'object' ? opts.rightArm.bend : undefined;
+      const armState = computeArmGesture(gType, sh(1), armLen, torsoW, torsoH, {
+        frame: opts.frame ?? 0, facing: facing || 1, side: 'right', target: gTarget,
+      });
+      if (gBend) {
+        const ikRes = solve2BoneIK(sh(1), armState.hand, armLen * 0.52, armLen * 0.48, gBend, facing || 1);
+        arms.push({ pts: [sh(1), ikRes.joint, ikRes.target], front: armState.isFront });
+      } else {
+        arms.push({ pts: [armState.shoulder, armState.elbow, armState.hand], front: armState.isFront });
+      }
+    } else if (rifle) {
       const G = lerp2(R0, R1, 0.1);
       arms.push({ pts: [sh(1), [tcx + 1.12 * T.a + 5 * u, sh(1)[1] + 0.45 * HH], G], front: false });
     } else if (wave !== undefined) {
@@ -609,6 +651,9 @@ export type SideOpts = {
   stride?: number; light?: number; seed?: number;
   /** push mode: where the hands land at pose 1, in final canvas units (e.g. the swing kid's back) */
   hand?: [number, number];
+  /** Procedural 2-bone IK gesture */
+  arm?: ArmGestureOpt;
+  frame?: number;
 };
 
 /** two-bone leg, knee bending forward (+x) */
@@ -687,7 +732,15 @@ export const bodySide = (p: Pen, o: Outfit, opts: SideOpts) => {
   const rifle = !!o.rifle && (mode === "march" || mode === "stand");
   const B0: P2 = [tcx + 0.72 * T.a, chin + 0.58 * HH], B1: P2 = [tcx - 0.95 * T.a - 22 * u, crown - 0.4 * HH];
   let near: [P2, P2, P2], far: [P2, P2, P2] | null;
-  if (mode === "swing") { near = [S, [S[0] + 12 * u, S[1] - 0.16 * HH], [300 + 6 * u, chin - 0.3 * HH]]; far = [S, [S[0] + 8 * u, S[1] - 0.18 * HH], [300 + 2 * u, chin - 0.36 * HH]]; }
+  if (opts.arm) {
+    const gType = typeof opts.arm === 'string' ? opts.arm : (opts.arm.gesture || 'idle');
+    const gTarget = typeof opts.arm === 'object' ? opts.arm.target : undefined;
+    const armState = computeArmGesture(gType, S, aLen, W * 0.9, Bd.torso * HH, {
+      frame: opts.frame ?? 0, facing: 1, side: 'right', target: gTarget,
+    });
+    near = [armState.shoulder, armState.elbow, armState.hand];
+    far = mode === "march" ? swingArm(rad(30) * nearFwd) : null;
+  } else if (mode === "swing") { near = [S, [S[0] + 12 * u, S[1] - 0.16 * HH], [300 + 6 * u, chin - 0.3 * HH]]; far = [S, [S[0] + 8 * u, S[1] - 0.18 * HH], [300 + 2 * u, chin - 0.36 * HH]]; }
   else if (mode === "push") {
     const reach = 0.55 * HH + 0.45 * HH * pose;
     let hN: P2 = [S[0] + reach, S[1] + 0.06 * HH];

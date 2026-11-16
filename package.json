@@ -6,10 +6,12 @@
   "type": "module",
   "scripts": {
     "start": "remotion studio",
-    "render": "remotion render src/index.ts RicksClipsFull out/video.mp4",
-    "render:showcase": "remotion render src/index.ts RicksClipsShowcase out/showcase.mp4",
-    "render:demo": "remotion render src/index.ts RicksClipsDemo out/demo.mp4",
-    "still": "remotion still src/index.ts RicksClipsFull out/frame.png",
+    "render": "powershell -ExecutionPolicy Bypass -File tools/nightly-render.ps1",
+    "render:chunks": "powershell -ExecutionPolicy Bypass -File tools/render-frames.ps1",
+    "render:showcase": "remotion render src/index.ts EmuWarShowcase out/emu/showcase.mp4 --gl=angle",
+    "mux": "powershell -ExecutionPolicy Bypass -File tools/mux-frames.ps1",
+    "encode:youtube": "powershell -ExecutionPolicy Bypass -File tools/encode-youtube.ps1",
+    "still": "remotion still src/index.ts EmuWar out/emu/frame.png --gl=angle",
     "check": "tsc --noEmit",
     "tts": "python scripts/gemini_tts.py"
   },

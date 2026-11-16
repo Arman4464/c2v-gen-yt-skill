@@ -44,6 +44,9 @@ export type InkOptions = {
   farOpacity?: number; // opacity multiplier reached at distFar
   fadeNear?: number; // m: start of the far fade-out
   fadeFar?: number; // m: lines gone
+  boil?: boolean; // enable subtle 12 fps hand-drawn line boiling (Option A)
+  boilScale?: number; // line boil jitter in pixels (default 0.35 px)
+  frame?: number; // current animation frame for 12 fps boil stepping
 };
 
 const DEF: Required<InkOptions> = {
@@ -53,6 +56,7 @@ const DEF: Required<InkOptions> = {
   widthNear: 5.1, widthFar: 3.3, distNear: 6, distFar: 90, creaseScale: 0.8, // round 3: creases 0.64 -> 0.8 (building corners)
   depthLo: 0.01, depthHi: 0.03, angleLo: 35, angleHi: 50, concaveGain: 0.7, // depth jumps from 1 %; creases from 35 deg (roof eaves)
   farOpacity: 0.95, fadeNear: 150, fadeFar: 450,
+  boil: false, boilScale: 0.35, frame: 0,
 };
 
 const FS_VERT = /* glsl */ `
@@ -118,7 +122,15 @@ uniform float useMain;
 uniform float pxScale;   // output px per 1080x1920 px
 uniform vec2 fogRange;   // scene fog near / far (m); far <= near = no fog tint
 uniform float fogStart;  // ink stays pure black up to here (m), then tints toward the fog colour
+uniform float uBoil;     // subtle 12 fps line boiling magnitude (px)
+uniform float uBoilSeed; // 12 fps stepped animation seed
 varying vec2 vUv;
+
+float hashBoil(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
 
 // pixel steps along x, y and both diagonals, and their length in px
 const vec2 STEP[4] = vec2[4](vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(1.0, 1.0), vec2(1.0, -1.0));
@@ -156,6 +168,12 @@ void main() {
   float t = clamp(log(zc / dNear) / log(dFar / dNear), 0.0, 1.0);
   float w = mix(wNear, wFar, t) * pxScale;           // silhouette line width (output px) at this distance, near side only
   float hc = 0.5 * w * creaseScale;                  // crease line half width (px), drawn on both faces
+
+  if (uBoil > 0.0) {
+    float boilNoise = (hashBoil(floor(vUv * 360.0) + vec2(uBoilSeed, uBoilSeed * 1.618)) - 0.5) * 2.0 * uBoil;
+    w = max(0.5, w + boilNoise);
+    hc = max(0.25, hc + boilNoise * 0.5);
+  }
   float Wc = 1.0 / zc;
   vec3 n0 = nc.xyz;
   vec3 P0 = viewPos(vUv, zc);
@@ -284,6 +302,7 @@ export class InkPass extends Pass {
       cosLo: { value: Math.cos((o.angleLo * Math.PI) / 180) }, cosHi: { value: Math.cos((o.angleHi * Math.PI) / 180) },
       concaveGain: { value: o.concaveGain }, farOpacity: { value: o.farOpacity },
       fadeNear: { value: o.fadeNear }, fadeFar: { value: o.fadeFar }, strength: { value: o.strength }, useMain: { value: 0 }, pxScale: { value: 1 }, fogRange: { value: new THREE.Vector2(0, 0) }, fogStart: { value: 60 },
+      uBoil: { value: o.boil ? o.boilScale : 0 }, uBoilSeed: { value: 0 },
     });
     this.compMat = fs(COMP_FRAG, {
       inputBuffer: { value: null }, tMask: { value: this.maskRT.texture }, tNormal: { value: this.rt.texture },
@@ -305,6 +324,9 @@ export class InkPass extends Pass {
     for (const [k, n] of map) if (options[k] !== undefined) u[n].value = options[k];
     if (options.angleLo !== undefined) u.cosLo.value = Math.cos((options.angleLo * Math.PI) / 180);
     if (options.angleHi !== undefined) u.cosHi.value = Math.cos((options.angleHi * Math.PI) / 180);
+    if (options.boil !== undefined) u.uBoil.value = options.boil ? (options.boilScale ?? 0.35) : 0;
+    if (options.boilScale !== undefined && u.uBoil.value > 0) u.uBoil.value = options.boilScale;
+    if (options.frame !== undefined) u.uBoilSeed.value = Math.floor(options.frame / 2.5) * 2.5;
     if (options.color !== undefined) (this.compMat.uniforms.inkColor.value as THREE.Color).set(options.color);
   }
 

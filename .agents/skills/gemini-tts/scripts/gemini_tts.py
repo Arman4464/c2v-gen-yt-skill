@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 # Load .env file from project root or parent directories
 load_dotenv()
 
-DEFAULT_API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6JdMkqzujAH2IoO2EtiZui3rUOT_Dk4zUjaH9UlOEavfQ")
+DEFAULT_API_KEY = os.getenv("GEMINI_API_KEY")
 
 def generate_tts(text: str, output_path: str, voice: str = "Puck", model: str = "gemini-3.8-flash-tts", api_key: str = None):
     key = api_key or DEFAULT_API_KEY

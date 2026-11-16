@@ -7,13 +7,13 @@ import * as THREE from "three";
 import {
   Pen, bodyFront, bodySide, swingKid, soldier, townsfolk, OFFICER, KID, PARENT, fxNote, fxBurst, fxSplash, fxStars, fxCreak, fxRing, fxShadow, fxContact, fxPlank, fxDrum,
   Outfit, Expr, FrontOpts, SideOpts,
-} from "./toon";
+} from "../../engine/toon";
 import {
   FPS, D0, FILES, ROW_GAP, COUNT, PARK, SHOTS, SNAP, DROP0, DROP1, DROP_H, V3, front, marchPhase, stomp, deckY, dropW, dropU, shapeZ,
   smooth, clamp01, BridgeState,
 } from "./story";
-import { NOINK } from "./ink";
-import { cardShade, blobMaterial, CARD_K } from "./cardshade";
+import { NOINK } from "../../engine/ink";
+import { cardShade, blobMaterial, CARD_K } from "../../engine/cardshade";
 
 // ---------------- canvas pool ----------------
 type Entry = { cv: HTMLCanvasElement; tex: THREE.CanvasTexture; w: number; h: number };
@@ -38,6 +38,10 @@ export class Pool {
     const want = new Map<string, Req[]>();
     for (const r of this.reqs) { const l = want.get(r.key); if (l) l.push(r); else want.set(r.key, [r]); }
     for (const [key, e] of this.live) if (!want.has(key)) { this.live.delete(key); this.free.push(e); }
+    while (this.free.length > 24) {
+      const dead = this.free.pop();
+      dead?.tex.dispose();
+    }
     for (const [key, rs] of want) {
       let e = this.live.get(key);
       if (!e) {

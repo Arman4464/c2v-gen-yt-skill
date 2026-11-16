@@ -14,5 +14,4 @@ Config.setChromiumOpenGlRenderer('angle');
 // 2 tabs, not more: every tab holds two 1080x1920 WebGL contexts (post chains) and the GPU compositor
 // runs out of contexts before the CPU runs out of cores. Raise only with a measured render-time win.
 Config.setConcurrency(2);
-Config.setX264Preset('veryfast');
 Config.setTimeoutInMilliseconds(120000);

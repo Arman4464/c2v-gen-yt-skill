@@ -3,11 +3,11 @@
 // and the cast. update(id, f, camera) poses everything for shot `id` at frame f (pure function of id + f).
 import * as THREE from "three";
 import { Batch, Strand, boxGeo, V, lam, buildTown, flagTex, Ray, vegClone } from "./build";
-import { beam, bed, rep, ctex, planksHD, beamHD, stoneHD, cobbleHD, grassHD, chainHD, waterNear, waterFar, cloudHD } from "./paint";
-import { Pen, fxSign } from "./toon";
-import { LIGHTS, LOOK, LightPreset } from "./lights";
-import { TONE, CHAR, LFB, twoTone, untone } from "./shade";
-import { NOINK, noInkFallback } from "./ink";
+import { beam, bed, rep, ctex, planksHD, beamHD, stoneHD, cobbleHD, grassHD, chainHD, waterNear, waterFar, cloudHD } from "../../engine/paint";
+import { Pen, fxSign } from "../../engine/toon";
+import { LIGHTS, LOOK, LightPreset } from "../../engine/lights";
+import { TONE, CHAR, LFB, twoTone, untone } from "../../engine/shade";
+import { NOINK, noInkFallback } from "../../engine/ink";
 import { Pool, Actor, Fx, stage, snapFx, splashFx, creakFx, SIGN_AT, SU_SWING } from "./cast";
 import { FPS, D0, SHOTS, PARK, ANCHOR, SNAP, camAt, bridgeState, deckY, dropW, shapeZ, snapEnd, front, BridgeState, V3, smooth, FOREGROUND, ShotDef } from "./story";
 

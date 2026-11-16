@@ -21,7 +21,7 @@ export const ctex = (key: string, w: number, h: number, draw: (g: CanvasRenderin
   }
   return t;
 };
-/** clone with its own repeat */
+/** Clone texture with its own UV repeat. IMPORTANT: Call only once during scene initialization; never call inside per-frame loops to avoid VRAM leaks. */
 export const rep = (t: THREE.Texture, x: number, y: number) => {
   const c = t.clone(); c.repeat.set(x, y); c.needsUpdate = true; return c;
 };

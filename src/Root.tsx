@@ -1,8 +1,12 @@
 import React from 'react';
 import { Composition, staticFile } from 'remotion';
 import { getAudioDurationInSeconds } from '@remotion/media-utils';
-import { BridgeShort, BRIDGE_FRAMES } from './bridge/Bridge';
+import { BridgeShort, BRIDGE_FRAMES } from './videos/demo/Bridge';
 import { DemoVideo, DEMO_FRAMES } from './Composition';
+import { EmuWarShort, EMU_FRAMES } from './videos/emu/EmuWar';
+import { MolassesShort, MOLASSES_FRAMES } from './videos/molasses/MolassesFlood';
+import { MonaLisaShort, MONALISA_FRAMES } from './videos/monalisa/MonaLisaHeist';
+import { TemplateShort, TEMPLATE_FRAMES } from './videos/template/TemplateShort';
 
 const FPS = 30;
 const WIDTH = 1080;
@@ -46,6 +50,79 @@ export const RemotionRoot: React.FC = () => {
         width={WIDTH}
         height={HEIGHT}
         calculateMetadata={async () => ({ durationInFrames: await narrationFrames('demo_voiceover.wav') })}
+      />
+
+      {/* The Great Emu War of 1932: 10-shot vertical cartoon story short */}
+      <Composition
+        id="EmuWar"
+        component={EmuWarShort}
+        durationInFrames={EMU_FRAMES}
+        fps={FPS}
+        width={WIDTH}
+        height={HEIGHT}
+        calculateMetadata={async () => ({ durationInFrames: Math.max(EMU_FRAMES, await narrationFrames('emu_voiceover.wav')) })}
+      />
+
+      {/* 6-second quick check for EmuWar hook */}
+      <Composition
+        id="EmuWarShowcase"
+        component={EmuWarShort}
+        durationInFrames={180}
+        fps={FPS}
+        width={WIDTH}
+        height={HEIGHT}
+      />
+
+      {/* The Great Molasses Flood of 1919: 9-shot vertical cartoon story short */}
+      <Composition
+        id="MolassesFlood"
+        component={MolassesShort}
+        durationInFrames={MOLASSES_FRAMES}
+        fps={FPS}
+        width={WIDTH}
+        height={HEIGHT}
+        calculateMetadata={async () => ({ durationInFrames: Math.max(MOLASSES_FRAMES, await narrationFrames('molasses_voiceover.wav')) })}
+      />
+
+      {/* 6-second quick check for Molasses hook */}
+      <Composition
+        id="MolassesShowcase"
+        component={MolassesShort}
+        durationInFrames={180}
+        fps={FPS}
+        width={WIDTH}
+        height={HEIGHT}
+      />
+
+      {/* The 1911 Mona Lisa Heist: 8-shot vertical cartoon story short */}
+      <Composition
+        id="MonaLisaHeist"
+        component={MonaLisaShort}
+        durationInFrames={MONALISA_FRAMES}
+        fps={FPS}
+        width={WIDTH}
+        height={HEIGHT}
+        calculateMetadata={async () => ({ durationInFrames: Math.max(MONALISA_FRAMES, await narrationFrames('monalisa_voiceover.wav')) })}
+      />
+
+      {/* 6-second quick check for Mona Lisa hook */}
+      <Composition
+        id="MonaLisaShowcase"
+        component={MonaLisaShort}
+        durationInFrames={180}
+        fps={FPS}
+        width={WIDTH}
+        height={HEIGHT}
+      />
+
+      {/* Upgraded 2.5D Cel-Shaded Cartoon Engine Showcase Template for Future Videos */}
+      <Composition
+        id="CartoonShortsTemplate"
+        component={TemplateShort}
+        durationInFrames={TEMPLATE_FRAMES}
+        fps={FPS}
+        width={WIDTH}
+        height={HEIGHT}
       />
     </>
   );

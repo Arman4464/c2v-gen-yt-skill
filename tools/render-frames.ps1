@@ -1,37 +1,54 @@
-# Resumable, lossless frame render of RicksClipsFull.
+# Resumable, lossless chunked frame renderer for 2.5D cel-shaded cartoon shorts.
 #
-# Why: `remotion render` writes its frames into a temp file and throws them away on failure, so an
-# interrupted 45-minute render loses everything. This writes PNGs named by GLOBAL frame number into
-# out\frames, one 200-frame chunk at a time, and skips chunks that are already complete. A crash or a
-# reboot costs at most the chunk in progress; re-running fills only the gaps.
-#
-# Then: tools\mux-frames.ps1 turns the frames + narration into out\video.mp4 in one encode.
+# Why: `remotion render` writes frames into a temp container and discards all progress on failure or reboot.
+# This script writes lossless PNGs named by GLOBAL frame number into out\frames in chunks (default 150 frames),
+# checking and skipping chunks that are already finished on disk.
+# A crash, interruption, or scheduled window cutoff costs at most the chunk in progress; re-running fills gaps.
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File tools\render-frames.ps1
-#   powershell -ExecutionPolicy Bypass -File tools\render-frames.ps1 -Chunk 400
+#   powershell -ExecutionPolicy Bypass -File tools\render-frames.ps1 -Composition EmuWar -Wav public\emu_voiceover.wav -Chunk 150 -StopTime "07:00"
+
 param(
-  [int]$Chunk = 200,
-  # composition length in frames; derived from the narration WAV so it cannot drift from the audio
-  [int]$Total = 0
+  [string]$Composition = "EmuWar",
+  [string]$Wav = "public\emu_voiceover.wav",
+  [int]$Chunk = 150,
+  [int]$Total = 0,
+  [string]$FramesDir = "",
+  [string]$Log = "out\render-log.txt",
+  [string]$StopTime = "" # e.g. "07:00" cutoff to stop morning renders cleanly
 )
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+$slug = switch -Regex ($Composition) {
+  "Emu"        { "emu" }
+  "Molasses"   { "molasses" }
+  "Bridge"     { "demo" }
+  "RicksClips" { "demo" }
+  "MonaLisa"   { "monalisa" }
+  "Template"   { "template" }
+  default      { $Composition.ToLower() }
+}
+if (-not $FramesDir) { $FramesDir = "out\frames\$slug" }
+
 $ffprobe = 'node_modules\@remotion\compositor-win32-x64-msvc\ffprobe.exe'
+$wavPath = Join-Path $root $Wav
 if ($Total -le 0) {
-  $dur = [double](& $ffprobe -v error -show_entries format=duration -of csv=p=0 public\bridge_voiceover.wav)
-  $Total = [math]::Ceiling($dur * 30)
+  if (Test-Path $wavPath) {
+    $dur = [double](& $ffprobe -v error -show_entries format=duration -of csv=p=0 $wavPath)
+    $Total = [math]::Ceiling($dur * 30)
+  } else {
+    $Total = 1460
+  }
 }
 
-$frames = Join-Path $root 'out\frames'
-$log = Join-Path $root 'out\render-log.txt'
+$frames = Join-Path $root $FramesDir
+$logPath = Join-Path $root $Log
 New-Item -ItemType Directory -Force -Path $frames | Out-Null
 
-# Remotion pads the frame number to the width of the range's LAST frame, so the same frame can be
-# element-060.png or element-0060.png depending on the chunk. Normalise everything to 4 digits.
 function Normalize-Frames {
   Get-ChildItem $frames -Filter 'element-*.png' -ErrorAction SilentlyContinue | ForEach-Object {
     if ($_.BaseName -match '^element-(\d+)$' -and $matches[1].Length -lt 4) {
@@ -41,26 +58,54 @@ function Normalize-Frames {
 }
 
 function Test-Chunk($s, $e) {
-  return ((Test-Path (Join-Path $frames ("element-{0:d4}.png" -f $s))) -and
-          (Test-Path (Join-Path $frames ("element-{0:d4}.png" -f $e))))
+  for ($i = $s; $i -le $e; $i++) {
+    $f = Join-Path $frames ("element-{0:d4}.png" -f $i)
+    if (-not (Test-Path $f)) { return $false }
+    if ((Get-Item $f).Length -eq 0) { return $false }
+  }
+  return $true
 }
 
-Add-Content $log ("=== run {0} total={1} chunk={2} ===" -f (Get-Date -Format s), $Total, $Chunk)
+Add-Content $logPath ("=== run {0} composition={1} total={2} chunk={3} stopTime={4} ===" -f (Get-Date -Format s), $Composition, $Total, $Chunk, $StopTime)
+Write-Host "Starting chunked render for '$Composition' (Total frames: $Total, Chunk size: $Chunk)..."
 
 for ($s = 0; $s -lt $Total; $s += $Chunk) {
   $e = [Math]::Min($s + $Chunk - 1, $Total - 1)
   Normalize-Frames
+
+  # Check if scheduled cutoff time has arrived
+  if ($StopTime) {
+    $now = Get-Date
+    $timeParts = $StopTime.Split(':')
+    $stopHour = [int]$timeParts[0]
+    $stopMin = [int]$timeParts[1]
+    if (($now.Hour -eq $stopHour -and $now.Minute -ge $stopMin) -or ($now.Hour -gt $stopHour -and $now.Hour -lt 12)) {
+      $msg = ("Reached scheduled cutoff time ({0} at {1}). Pausing cleanly. Finished chunks are safely stored." -f $StopTime, (Get-Date -Format 'HH:mm:ss'))
+      Add-Content $logPath ("=== {0} ===" -f $msg)
+      Write-Host $msg -ForegroundColor Yellow
+      break
+    }
+  }
+
   if (Test-Chunk $s $e) {
-    Add-Content $log ("skip {0}-{1} (done)" -f $s, $e)
+    Add-Content $logPath ("skip {0}-{1} (already done)" -f $s, $e)
+    Write-Host "Chunk $s-$e already rendered, skipping..."
     continue
   }
+
+  Write-Host "Rendering chunk $s-$e using GT 710 (ANGLE D3D11)..."
   $sw = [Diagnostics.Stopwatch]::StartNew()
-  & cmd /c "node_modules\.bin\remotion.cmd render src/index.ts RicksClipsFull `"$frames`" --sequence --image-format=png --frames=$s-$e --log=error 2>&1" | Out-Null
+  & cmd /c "node_modules\.bin\remotion.cmd render src/index.ts $Composition `"$frames`" --sequence --image-format=png --frames=$s-$e --gl=angle --log=error 2>&1" | Out-Null
   $code = $LASTEXITCODE
   $sw.Stop()
+
   Normalize-Frames
-  $has = (Get-ChildItem $frames -Filter 'element-*.png').Count
-  Add-Content $log ("chunk {0}-{1} exit={2} {3:n1}s onDisk={4}/{5}" -f $s, $e, $code, $sw.Elapsed.TotalSeconds, $has, $Total)
+  $has = (Get-ChildItem $frames -Filter 'element-*.png' -ErrorAction SilentlyContinue).Count
+  $entry = ("chunk {0}-{1} exit={2} {3:n1}s onDisk={4}/{5}" -f $s, $e, $code, $sw.Elapsed.TotalSeconds, $has, $Total)
+  Add-Content $logPath $entry
+  Write-Host $entry
 }
 
-Add-Content $log ("=== chunks done {0} ===" -f (Get-Date -Format s))
+$finalCount = (Get-ChildItem $frames -Filter 'element-*.png' -ErrorAction SilentlyContinue).Count
+Add-Content $logPath ("=== session done {0} onDisk={1}/{2} ===" -f (Get-Date -Format s), $finalCount, $Total)
+Write-Host "Session complete. Frames on disk: $finalCount / $Total."

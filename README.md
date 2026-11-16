@@ -85,18 +85,39 @@ npm run check             # tsc --noEmit (strict)
 
 ## Layout
 ```
+videos/             # video projects (junction to src/videos/)
+  emu/              # The Great Emu War of 1932 (EmuWar / EmuWarShowcase)
+    EmuWar.tsx      composition canvas + post chain
+    story.ts        shot timeline & camera keys (10 shots, 1460 f)
+    world.ts        3D Australian outback world & lighting
+    cast.ts         character staging & texture caching pool
+    toon.ts         2D cartoon emu & Aussie soldier card drawings
+    Captions.tsx    synchronized subtitles with gold highlights
+  demo/             # Broughton Suspension Bridge (RicksClipsFull / Showcase)
+    Bridge.tsx      canvas + post chain
+    story.ts        shot timeline & camera keys (15 shots, 1956 f)
+    world.ts        3D river town, bridge & lighting
+    cast.ts         marching soldier cast & props
+    build.ts        town geometry batches & props
+    Captions.tsx    subtitles
 src/
-  Root.tsx          composition registry
-  Composition.tsx   RicksClipsDemo (text cards)
-  bridge/           RicksClipsFull / Showcase: the 3D bridge short
-    Bridge.tsx      canvas + post chain (ink, lens blur, bloom, tone map, grade, grain)
-    story.ts        shot timeline, camera keys, DOF, foreground framing
-    world.ts        the set (sky, river, town, bridge, lights) posed per frame
-    cast.ts         character/effect cards and the drawing pool
-    toon.ts         canvas character art
-    build.ts        static geometry + props
-    paint.ts        painted canvas textures
-    shade.ts        two-tone shading, lights.ts / grade.ts / lensblur.ts / ink.ts / cardshade.ts: look passes
-scripts/gemini_tts.py   Gemini TTS voiceover
+  engine/           # Core 2.5D cel-shaded toon engine (shared across videos)
+    ink.ts          custom InkPass edge detection shader
+    lensblur.ts     64-tap Vogel disc thin-lens bokeh & grain
+    grade.ts        color grade & tone mapping passes
+    shade.ts        two-tone cel-shading uniforms
+    cardshade.ts    billboard character card shader
+    lights.ts       directional sun & time-of-day presets
+    paint.ts        procedural hand-painted canvas textures
+    toon.ts         Pen API & cartoon drawing primitives
+  Root.tsx          Remotion composition registry
+  Composition.tsx   text cards demo
+out/
+  frames/
+    demo/           1,956 PNG frames for the bridge short
+    emu/            PNG frames for the emu short (chunked)
+  demo/             finished MP4s for the bridge short (video.mp4, video-youtube.mp4)
+  emu/              showcase.mp4, stills & final videos for the emu short
+```
 tools/verify/           still/contact-sheet/probe helpers
 ```

@@ -18,9 +18,9 @@ import { useThree } from "@react-three/fiber";
 import { EffectComposer } from "@react-three/postprocessing";
 import { BlendFunction, BloomEffect, ToneMappingEffect, ToneMappingMode } from "postprocessing";
 import { World } from "./world";
-import { InkPass } from "./ink";
-import { LensBlur, GrainEffect } from "./lensblur";
-import { GradeEffect, GRADES, GRADE_STRENGTH, gradeFor } from "./grade";
+import { InkPass } from "../../engine/ink";
+import { LensBlur, GrainEffect } from "../../engine/lensblur";
+import { GradeEffect, GRADES, GRADE_STRENGTH, gradeFor } from "../../engine/grade";
 import { TOTAL, FLASH_AT, SHOTS, layersAt, dofAt, focusAt } from "./story";
 
 export const BRIDGE_FRAMES = TOTAL;

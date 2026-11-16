@@ -19,22 +19,22 @@ Every video must strictly follow this visual formula:
    - Modeled 3D sets (rooms, corporate offices, city streets, bridges, labs) rendered in Three.js.
    - Painted canvas textures (`paint.ts`: wooden planks, stone cobble, painted plaster, tiles, glass).
    - Thick-thin black ink outlines on all 3D geometry edges and depth jumps via `InkPass`.
+   - **12 FPS Line Boil**: Enable `boil: true` on `InkPass` to inject subtle organic hand-drawn vibration.
+   - **Comic Halftone Shading**: Enable `cardShade(mat, { halftone: true })` for Ben-Day stipple texture in shadows.
    - Soft cinematic depth of field (`LensBlur`) focusing on the active character while gracefully blurring the background.
-3. **Dynamic 3D Cinematography**:
+3. **Dynamic 3D Cinematography & Retention Grammar**:
    - Continuous gliding camera moves: dolly tracking along hallways, perspective zoom-ins on key props/doors, low camera heights, and Dutch tilts for drama.
-   - Ease-out bursts: fast start decaying smoothly into holds with subtle creeping drift.
+   - **2.5s Snap Zoom Rule**: Use `getSnapZoom(frame, 75)` to inject micro-punches (6-8% instant zoom) on narrative beats, resetting viewer attention.
+   - **Seamless Infinite Loop Outro**: Use `getLoopBlend(frame, totalFrames, 15)` to smoothly match-cut the camera position and focus back to frame 0, driving 130%+ Average Percentage Viewed (APV).
    - Flash transitions (3-4 frame white flash) for punchy scene resets.
-4. **Captions**:
-   - Rapid phrase/word-by-word pop-up captions placed in the mid-frame safe area (`bottom: 520px` on a
-     1080x1920 frame — above the YouTube Shorts title / channel name / description / action rail, which
-     cover roughly the bottom 350 px).
-   - Bold uppercase sans-serif with **no box, no scrim, no blur**: the caption sits directly on the scene,
-     kept legible by a dark text rim (multi-offset shadow) plus a soft drop shadow.
-   - Bright yellow/gold (`#fbbf24`) keyword highlights against white text.
-5. **Voiceover & Audio**:
+4. **Kinetic Captions**:
+   - Use `KineticCaptions` placed at `bottom: 380px` on a 1080x1920 frame (clear of YouTube Shorts UI rail at 0-320px).
+   - Bold uppercase sans-serif with **no box, no scrim, no blur**: the caption sits directly on the scene.
+   - Word-level spring bounce (`spring()` physics with 1.15x scale pop) and active word highlight in electric gold (`#FFE600`) with alternating cartoon tilt ($\pm 1.8^\circ$).
+5. **Voiceover & Audio Mix**:
    - Spoken narrative delivered via Gemini TTS (`scripts/gemini_tts.py` with `Puck` or `Charon`).
    - Pacing: Fast, conversational, ~3.7 words per second.
-   - Music & SFX: Light pizzicato/curious score at 50% (−6 dB) of speech level, accented by synced cartoon SFX (whooshes, clicks, bells, snaps).
+   - **Soundscape**: Mount `Soundscape` (`src/engine/audio.tsx`) with subtle background pizzicato music bed (`audio/pizzicato_bed.wav`) ducked dynamically to ~0.08 during speech, accented by synced cartoon SFX (`audio/whoosh.wav`, `audio/pop.wav`, `audio/clang.wav`, `audio/thud.wav`, `audio/boing.wav`). Sound is strictly subtle and secondary.
 
 ---
 
@@ -91,6 +91,7 @@ progress. `encode-youtube.ps1` is the delivery standard for every future video �
 ---
 
 ## 3. ABSOLUTE PROHIBITIONS
+- NEVER execute single-pass direct renders (`remotion render out/video.mp4`) for full compositions; ALWAYS use chunked resumable rendering (`tools/render-frames.ps1`).
 - NEVER render generic dark motion-graphics kinetic typography with text boxes.
 - NEVER leave characters static without idle breathing and eye blinks.
 - NEVER use flat unshaded 3D; always apply `InkPass` and `LensBlur`.

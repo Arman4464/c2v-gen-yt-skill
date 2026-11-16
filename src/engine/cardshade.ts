@@ -64,16 +64,27 @@ const DECL = "#include <common>\nuniform vec3 uCharTint; uniform float uCharShad
 export const CARD_K = { uGradK: { value: GRAD_K }, uGradKB: { value: GRAD_KB }, uTintK: { value: TINT_K }, uNorm: { value: 0.7 }, uGain: { value: 1.03 }, uPx: { value: 0.5 } }; // uPx = render height / 1920 (set per draw in cast.ts)
 
 /** MeshLambertMaterial -> lit card: no emissive, scene tint, bright floor, side gradient toward the sun. */
-export function cardShade(m: THREE.MeshLambertMaterial) {
+export function cardShade(m: THREE.MeshLambertMaterial, options: { halftone?: boolean } = {}) {
   m.emissive.set(0x000000); m.emissiveIntensity = 0; m.emissiveMap = null;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, CHAR, CARD_K);
+    let cardFrag = CARD;
+    if (options.halftone) {
+      cardFrag = cardFrag.replace(
+        "outgoingLight *= mix( uCharShade, 1.0, sunVis ) * ( 1.0 - g * dark ) * sideK * top * lift * uGain;",
+        "vec2 dotCoord = gl_FragCoord.xy * 0.28;\n" +
+        "float dotPattern = sin(dotCoord.x) * sin(dotCoord.y);\n" +
+        "float stipple = smoothstep(-0.25, 0.25, dotPattern);\n" +
+        "float shadeMult = mix(1.0, 0.88 + 0.12 * stipple, dark);\n" +
+        "outgoingLight *= mix( uCharShade, 1.0, sunVis ) * ( 1.0 - g * dark ) * sideK * top * lift * uGain * shadeMult;"
+      );
+    }
     sh.fragmentShader = sh.fragmentShader
       .replace("#include <common>", DECL)
       .replace("#include <lights_fragment_begin>", "float sunVis = 1.0;\n" + LFB)
-      .replace("vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;", CARD);
+      .replace("vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;", cardFrag);
   };
-  m.customProgramCacheKey = () => "card9";
+  m.customProgramCacheKey = () => (options.halftone ? "card9_half" : "card9");
   return m;
 }
 
