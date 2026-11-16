@@ -5,8 +5,8 @@
 # encoded MP4 and (optionally) asserts them, so "1080x1920 @30 h264" is verified, not assumed.
 #
 # Usage:
-#   scripts/probe-mp4.sh out.mp4                 # just print the spec
-#   scripts/probe-mp4.sh out.mp4 1080x1920 30    # assert vertical 1080x1920 @ ~30fps
+#   tools/verify/probe-mp4.sh out.mp4                 # just print the spec
+#   tools/verify/probe-mp4.sh out.mp4 1080x1920 30    # assert vertical 1080x1920 @ ~30fps
 # Needs: ffprobe (ships with ffmpeg).
 set -euo pipefail
 mp4="${1:?usage: probe-mp4.sh <file.mp4> [WxH] [fps]}"

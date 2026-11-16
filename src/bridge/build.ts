@@ -1,13 +1,15 @@
 // Static scenery: merged batches (one mesh per material), box-section strands rebuilt along a path every frame
 // (chains, rails), and the town on both banks: gabled houses with painted facades, church, mill + chimneys, quay,
-// hills and CC0 Kenney props (trees, lanterns, stalls, hedges).
+// hills and cartoon vegetation (trees, bushes, hedges, banners).
+//
+// prop() used to place Kenney .glb models as well. No .glb ships with this project, so that path is gone: every
+// name that is not vegetation or a banner is skipped and reported once (see `missing` below) instead of vanishing.
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { D0 } from "./story";
 import { brick, rng, ctex, rep, facadeHD, roofHD, stoneHD } from "./paint";
 import { twoTone } from "./shade";
 
-export type Kit = Record<string, THREE.Object3D>;
 export const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 // ---------------- materials (shared, cached) ----------------
@@ -421,11 +423,13 @@ const bannerProp = (b: Batch, name: string, x0: number, y: number, z0: number, h
   b.add(bannerGeo(), lam("bannerHD" + col, () => ({ map: bannerTex(col), side: THREE.DoubleSide })), M(0, h - 0.2, 0.1));
 };
 
-// ---------------- Kenney props ----------------
-const boxes = new Map<THREE.Object3D, THREE.Box3>();
-/** place a Kenney model with its base on y, scaled to height h (left out when it would stand in front of the lens).
- *  Trees, bushes and hedges are drawn as cartoon vegetation, banners as painted cloth instead (MAT pass). */
-export const prop = (b: Batch, kit: Kit, name: string, x: number, y: number, z: number, h: number, yaw = 0) => {
+// ---------------- props ----------------
+/** names in the town layout that no longer have a model to place (the Kenney .glb set is not in this repo) */
+const missing = new Set<string>();
+const DEV = typeof process === "undefined" || process.env.NODE_ENV !== "production";
+/** place a prop with its base on y, scaled to height h (left out when it would stand in front of the lens).
+ *  Trees, bushes and hedges are drawn as cartoon vegetation, banners as painted cloth (MAT pass). */
+export const prop = (b: Batch, name: string, x: number, y: number, z: number, h: number, yaw = 0) => {
   if (name.startsWith("banner")) { bannerProp(b, name, x, y, z, h, yaw); return; }
   const vk = VEG[name];
   if (vk) {
@@ -435,39 +439,22 @@ export const prop = (b: Batch, kit: Kit, name: string, x: number, y: number, z: 
     addVeg(b, vk, x, y, z, h, x * 92.7 + z * 31.3 + yaw * 1000, d > 200 ? 2 : Math.abs(z) > 45 && d > 60 ? 1 : 0);
     return;
   }
-  const o = kit[name];
-  if (!o) return;
-  let box = boxes.get(o);
-  if (!box) { box = new THREE.Box3().setFromObject(o); boxes.set(o, box); }
-  const s = h / Math.max(0.01, box.max.y - box.min.y), r = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * s * 0.5;
-  if (inTheWay(x - r, x + r, y, y + h, z - r, z + r, true)) return;
-  b.addObject(o, new THREE.Matrix4().compose(V(x, y - box.min.y * s, z), new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), yaw), V(s, s, s)));
+  if (DEV && !missing.has(name)) { missing.add(name); console.warn(`[build.ts] prop "${name}" has no model and is skipped (no .glb assets in this project)`); }
 };
 
-/** a Kenney model as its own object (two-tone materials), base at y = 0, scaled to height h (no sight-line test:
- *  used for the CAM agent's FOREGROUND framing objects, which are meant to stand in front of the lens) */
-export const kitClone = (kit: Kit, name: string, h: number): THREE.Object3D | null => {
+/** a vegetation prop as its own object (base at y = 0, scaled to height h), for foreground framing objects:
+ *  built outside prop()'s sight-line test because it is meant to stand in front of the lens. null = no model. */
+export const vegClone = (name: string, h: number): THREE.Object3D | null => {
   const vk = VEG[name];
-  if (vk) { // cartoon plant as its own object (MAT pass), base at y = 0
-    const vb = new Batch(), grp = new THREE.Group();
-    addVeg(vb, vk, 0, 0, 0, h, name.length * 977 + h * 131, 0);
-    vb.build(grp, false);
-    grp.traverse((x) => { const m = x as THREE.Mesh; if (m.isMesh) { m.castShadow = false; m.receiveShadow = true; m.matrixAutoUpdate = true; } });
-    return grp;
+  if (!vk) {
+    if (DEV && !missing.has(name)) { missing.add(name); console.warn(`[build.ts] foreground prop "${name}" has no model and is skipped`); }
+    return null;
   }
-  const o = kit[name];
-  if (!o) return null;
-  let box = boxes.get(o);
-  if (!box) { box = new THREE.Box3().setFromObject(o); boxes.set(o, box); }
-  const c = o.clone(true), s = h / Math.max(0.01, box.max.y - box.min.y);
-  c.traverse((x) => {
-    const m = x as THREE.Mesh;
-    if (m.isMesh) { m.material = toLambert(Array.isArray(m.material) ? m.material[0] : m.material); m.castShadow = false; m.receiveShadow = true; }
-  });
-  const g = new THREE.Group();
-  c.position.y = -box.min.y * s; c.scale.setScalar(s);
-  g.add(c);
-  return g;
+  const vb = new Batch(), grp = new THREE.Group();
+  addVeg(vb, vk, 0, 0, 0, h, name.length * 977 + h * 131, 0);
+  vb.build(grp, false);
+  grp.traverse((x) => { const m = x as THREE.Mesh; if (m.isMesh) { m.castShadow = false; m.receiveShadow = true; m.matrixAutoUpdate = true; } });
+  return grp;
 };
 
 // ---------------- houses ----------------
@@ -585,7 +572,7 @@ const inPark = (x: number, z: number) => z < 0 && x > 46 && x < 96 && z > -100 &
 const inMill = (x: number, z: number) => z < 0 && x > -66 && x < -14 && z > -90 && z < -54;
 const inChurch = (x: number, z: number) => (z > 0 && x > 10 && x < 38 && z > 46 && z < 84) || (z > 0 && x > 86 && x < 110 && z > 60 && z < 84);
 
-export const buildTown = (root: THREE.Object3D, kit: Kit, rays: Ray[] = []) => {
+export const buildTown = (root: THREE.Object3D, rays: Ray[] = []) => {
   const b = new Batch(), r = rng(11);
   sight = rays;
   const pick = <T,>(a: T[]) => a[Math.floor(r() * a.length) % a.length];
@@ -658,46 +645,46 @@ export const buildTown = (root: THREE.Object3D, kit: Kit, rays: Ray[] = []) => {
     b.add(hill, hm[i % 3], new THREE.Matrix4().compose(V(x, D0 - 2, z), new THREE.Quaternion(), V(sx, sy, sz))));
   // trees: quays, gardens, valley, hilltops
   const trees = ["tree_oak", "tree_default", "tree_detailed", "tree_fat", "tree-high-round", "tree"];
-  for (const bank of [-1, 1]) for (let x = -130; x <= 130; x += 22) if (Math.abs(x) > 12) prop(b, kit, pick(trees), x + r() * 4, D0, bank * 33.6, 7 + r() * 2.5, r() * 6);
+  for (const bank of [-1, 1]) for (let x = -130; x <= 130; x += 22) if (Math.abs(x) > 12) prop(b, pick(trees), x + r() * 4, D0, bank * 33.6, 7 + r() * 2.5, r() * 6);
   for (let i = 0; i < 140; i++) {
     const x = (r() - 0.5) * 520, z = (r() < 0.5 ? -1 : 1) * (48 + r() * 220);
     if (inPark(x, z) || inMill(x, z) || inChurch(x, z) || Math.abs(x) < 16) continue;
-    prop(b, kit, pick(trees), x, D0, z, 7 + r() * 4, r() * 6);
+    prop(b, pick(trees), x, D0, z, 7 + r() * 4, r() * 6);
   }
   for (let i = 0; i < 60; i++) {
     const a = r() * Math.PI * 2, d = 230 + r() * 160;
-    prop(b, kit, pick(["tree_cone", "tree_default", "tree_oak"]), Math.cos(a) * d * 1.3, D0, Math.sin(a) * d, 12 + r() * 6, r() * 6);
+    prop(b, pick(["tree_cone", "tree_default", "tree_oak"]), Math.cos(a) * d * 1.3, D0, Math.sin(a) * d, 12 + r() * 6, r() * 6);
   }
   // quay furniture
   for (const bank of [-1, 1]) {
-    for (let x = -126; x <= 126; x += 12) if (Math.abs(x) > 5) prop(b, kit, "lantern", x, D0, bank * 31.0, 2.8);
-    prop(b, kit, "banner-red", 5.4, D0, bank * 31.6, 3.6, bank > 0 ? Math.PI : 0);
+    for (let x = -126; x <= 126; x += 12) if (Math.abs(x) > 5) prop(b, "lantern", x, D0, bank * 31.0, 2.8);
+    prop(b, "banner-red", 5.4, D0, bank * 31.6, 3.6, bank > 0 ? Math.PI : 0);
   }
-  prop(b, kit, "stall-red", -14, D0, -34, 3.2);
-  prop(b, kit, "stall-green", -21.5, D0, -34.4, 3.2, 0.1);
+  prop(b, "stall-red", -14, D0, -34, 3.2);
+  prop(b, "stall-green", -21.5, D0, -34.4, 3.2, 0.1);
   // round 4: this cart sat blurred in shot 11's bottom-left corner (lens at 14, 10.5, -47) as a grey "mushroom"
   // (bed + handle + wheel); moved 3.5 m along the quay, out of that frame, still dressing the market
-  prop(b, kit, "cart", 17.0, D0, -34.0, 2.2, 1.2);
-  prop(b, kit, "stall-bench", 20, D0, -32.2, 1.0);
-  prop(b, kit, "stall-green", 16, D0, 34, 3.2, Math.PI);
-  prop(b, kit, "stall-red", 23.5, D0, 34.3, 3.2, Math.PI);
-  prop(b, kit, "cart", -15, D0, 33.6, 2.2, 2.4);
-  prop(b, kit, "windmill", 98, D0, 72, 16, -0.6);
-  prop(b, kit, "canoe", -19, 0.02, 27.6, 0.7, 1.5);
-  prop(b, kit, "canoe", 31, 0.02, -28.2, 0.7, -1.4);
-  for (let i = 0; i < 14; i++) prop(b, kit, "lily_large", (r() - 0.5) * 120, 0.03, (r() < 0.5 ? -1 : 1) * (27.2 + r() * 2.2), 0.08, r() * 6);
+  prop(b, "cart", 17.0, D0, -34.0, 2.2, 1.2);
+  prop(b, "stall-bench", 20, D0, -32.2, 1.0);
+  prop(b, "stall-green", 16, D0, 34, 3.2, Math.PI);
+  prop(b, "stall-red", 23.5, D0, 34.3, 3.2, Math.PI);
+  prop(b, "cart", -15, D0, 33.6, 2.2, 2.4);
+  prop(b, "windmill", 98, D0, 72, 16, -0.6);
+  prop(b, "canoe", -19, 0.02, 27.6, 0.7, 1.5);
+  prop(b, "canoe", 31, 0.02, -28.2, 0.7, -1.4);
+  for (let i = 0; i < 14; i++) prop(b, "lily_large", (r() - 0.5) * 120, 0.03, (r() < 0.5 ? -1 : 1) * (27.2 + r() * 2.2), 0.08, r() * 6);
   // park around the swing (near bank, x 50..92, z -96..-56)
   for (const [n, x, z, h] of [["tree_oak", 58, -66, 9.5], ["tree_fat", 84, -64, 8], ["tree_detailed", 54, -84, 9], ["tree_default", 88, -86, 9],
-    ["tree_oak", 79, -95, 10], ["tree-high-round", 61, -94, 9], ["tree_default", 92, -73, 8.5]] as const) prop(b, kit, n, x, D0, z, h, x);
-  for (let x = 50; x < 92; x += 3.2) prop(b, kit, "hedge", x, D0, -57, 1.5);
-  for (const [x, z] of [[62, -76], [77, -71], [66, -82], [75, -80], [57, -73]]) prop(b, kit, pick(["plant_bushLarge", "plant_bushDetailed", "plant_bush"]), x, D0, z, 1.3);
+    ["tree_oak", 79, -95, 10], ["tree-high-round", 61, -94, 9], ["tree_default", 92, -73, 8.5]] as const) prop(b, n, x, D0, z, h, x);
+  for (let x = 50; x < 92; x += 3.2) prop(b, "hedge", x, D0, -57, 1.5);
+  for (const [x, z] of [[62, -76], [77, -71], [66, -82], [75, -80], [57, -73]]) prop(b, pick(["plant_bushLarge", "plant_bushDetailed", "plant_bush"]), x, D0, z, 1.3);
   // flowers only (inked grass tufts read as green boxes), and none inside the swing's 4 m circle
   for (let i = 0; i < 26; i++) {
     const f = pick(["flower_redA", "flower_yellowA", "flower_purpleA"]), x = 56 + r() * 30, z = -60 - r() * 32;
-    if (Math.hypot(x - 70, z + 75) > 4) prop(b, kit, f, x, D0, z, 0.5);
+    if (Math.hypot(x - 70, z + 75) > 4) prop(b, f, x, D0, z, 0.5);
   }
-  prop(b, kit, "stall-bench", 76.5, D0, -79.5, 1.0, Math.PI);
-  prop(b, kit, "lantern", 64.5, D0, -71, 2.8);
+  prop(b, "stall-bench", 76.5, D0, -79.5, 1.0, Math.PI);
+  prop(b, "lantern", 64.5, D0, -71, 2.8);
   b.build(root);
   sight = [];
 };

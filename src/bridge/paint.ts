@@ -155,16 +155,6 @@ export const brick = () => ctex("brick", 512, 512, (g, r) => {
   }
 });
 
-export const chainTex = () => ctex("chain", 128, 512, (g) => {
-  g.fillStyle = "#2c2f36"; g.fillRect(0, 0, 128, 512);
-  for (let i = 0; i < 8; i++) {
-    g.strokeStyle = "#565c66"; g.lineWidth = 14;
-    g.beginPath(); g.ellipse(64, i * 64 + 32, 34, 26, 0, 0, 7); g.stroke();
-    g.strokeStyle = "rgba(255,255,255,.22)"; g.lineWidth = 4;
-    g.beginPath(); g.ellipse(64, i * 64 + 32, 34, 26, 0, 3.6, 5.4); g.stroke();
-  }
-});
-
 /** plaster/brick facade, w x h metres at 48 px/m: floors of shuttered windows, optional door + timber frame */
 export const facade = (key: string, wm: number, hm: number, o: { wall: string; shutter: string; door?: boolean; timber?: boolean; brick?: boolean }) =>
   ctex("fac" + key, Math.round(wm * 48), Math.round(hm * 48), (g, r) => {

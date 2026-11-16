@@ -5,7 +5,7 @@
 # match? any clipped text?). One image beats flipping between three.
 #
 # Usage:
-#   scripts/contact-sheet.sh sheet.png frame-0.png frame-1.5.png frame-3.png
+#   tools/verify/contact-sheet.sh sheet.png frame-0.png frame-1.5.png frame-3.png
 # All inputs must share the same height (frames from the same render do). Needs: ffmpeg.
 set -euo pipefail
 out="${1:?usage: contact-sheet.sh <out.png> <frame.png> [frame.png ...]}"; shift

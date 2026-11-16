@@ -5,14 +5,13 @@
 // Cards, effects and blobs live on the NOINK layer so the world ink pass never outlines their quads.
 import * as THREE from "three";
 import {
-  Pen, bodyFront, bodySide, swingKid, soldier, townsfolk, OFFICER, KID, PARENT, fxNote, fxBurst, fxSplash, fxStars, fxCreak, fxRing, fxBlob, fxShadow, fxContact, fxPlank, fxDrum,
+  Pen, bodyFront, bodySide, swingKid, soldier, townsfolk, OFFICER, KID, PARENT, fxNote, fxBurst, fxSplash, fxStars, fxCreak, fxRing, fxShadow, fxContact, fxPlank, fxDrum,
   Outfit, Expr, FrontOpts, SideOpts,
 } from "./toon";
 import {
   FPS, D0, FILES, ROW_GAP, COUNT, PARK, SHOTS, SNAP, DROP0, DROP1, DROP_H, V3, front, marchPhase, stomp, deckY, dropW, dropU, shapeZ,
   smooth, clamp01, BridgeState,
 } from "./story";
-import { LIGHTS } from "./lights";
 import { NOINK } from "./ink";
 import { cardShade, blobMaterial, CARD_K } from "./cardshade";
 
@@ -183,7 +182,16 @@ const lidAt = (t: number, i: number, swaps: number[] = []) => {
   }
   return 0;
 };
-const fkey = (o: object) => JSON.stringify(o, (_k, v) => (typeof v === "number" ? q(v) : v));
+/** Drawing cache key: the quantised option fields (1/120 unit, the same granularity as q()) joined in a fixed order.
+ *  This used to be JSON.stringify with a replacer, which walked every property and allocated a long string for each
+ *  of the 74 actors on every frame. */
+const kn = (v: number | undefined) => (v === undefined ? "" : Math.round(v * 120));
+const kb = (v: boolean | number | undefined) => (v === undefined ? "" : v === true ? "T" : v === false ? "F" : String(kn(v)));
+const kp = (p: FrontOpts["prop"]) => (p == null ? "" : Array.isArray(p) ? `${p[0]}${kn(p[1])}` : p);
+const fkey = (o: FrontOpts) =>
+  `${kn(o.phase)}|${o.expr ?? ""}|${o.mode ?? ""}|${kn(o.look)}|${kb(o.blink)}|${kn(o.lift)}|${kn(o.tilt)}|${kn(o.headTilt)}|${kn(o.wave)}|${kn(o.light)}|${o.facing ?? ""}|${kn(o.seed)}|${kp(o.prop)}`;
+const skey = (o: SideOpts) =>
+  `${kn(o.phase)}|${o.expr ?? ""}|${o.mode ?? ""}|${kb(o.blink)}|${kn(o.stomp)}|${kn(o.pose)}|${kn(o.stride)}|${kn(o.light)}|${kn(o.seed)}|${kn(o.hand?.[0])},${kn(o.hand?.[1])}`;
 
 type Who = { i: number; o: Outfit; okey: string };
 /** one character drawing in the 600 x 1000 design space, sized by distance, lit from the scene's sun */
@@ -192,7 +200,7 @@ const person = (cam: CamInfo, who: Who, x: number, y: number, z: number, view: {
   const [w, h, k] = tier(d);
   const mirror = view.side && view.mirror, light = light2D(cam, mirror), seed = seedOf(who.i);
   const f2: FrontOpts = { ...fo, light, seed }, s2: SideOpts = { ...so, light, seed };
-  const key = view.side ? `S|${who.okey}|${fkey(s2)}` : `F|${who.okey}|${fkey(f2)}`;
+  const key = view.side ? `S|${who.okey}|${skey(s2)}` : `F|${who.okey}|${fkey(f2)}`;
   return {
     key, x, y, z, scale, mirror, tierKey: `${w}`,
     draw: (p) => (view.side ? bodySide(p, who.o, s2) : bodyFront(p, who.o, f2)),
@@ -470,4 +478,3 @@ export const creakFx = (t: number, pts: V3[], out: Stage, size = 0.8) =>
     const u = q((t * 1.3 + i * 0.37) % 1, 30);
     out.fx.push({ key: `creak${u}`, cw: 300, ch: 300, draw: (p) => fxCreak(p, u), x, y, z, w: size, h: size, rot: i * 0.6 - 0.6 });
   });
-export { FPS };

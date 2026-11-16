@@ -2,28 +2,18 @@
 // backstays, anchors, bunting, flags) deformed every frame from the story physics, the park swing, smoke, clouds
 // and the cast. update(id, f, camera) poses everything for shot `id` at frame f (pure function of id + f).
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { staticFile } from "remotion";
-import { Batch, Strand, boxGeo, V, lam, buildTown, flagTex, Kit, Ray, kitClone } from "./build";
+import { Batch, Strand, boxGeo, V, lam, buildTown, flagTex, Ray, vegClone } from "./build";
 import { beam, bed, rep, ctex, planksHD, beamHD, stoneHD, cobbleHD, grassHD, chainHD, waterNear, waterFar, cloudHD } from "./paint";
 import { Pen, fxSign } from "./toon";
 import { LIGHTS, LOOK, LightPreset } from "./lights";
 import { TONE, CHAR, LFB, twoTone, untone } from "./shade";
-import { NOINK } from "./ink";
+import { NOINK, noInkFallback } from "./ink";
 import { Pool, Actor, Fx, stage, snapFx, splashFx, creakFx, SIGN_AT, SU_SWING } from "./cast";
 import { FPS, D0, SHOTS, PARK, ANCHOR, SNAP, camAt, bridgeState, deckY, dropW, shapeZ, snapEnd, front, BridgeState, V3, smooth, FOREGROUND, ShotDef } from "./story";
 
 // ---------------- assets ----------------
-const KENNEY = ["tree_oak", "tree_default", "tree_detailed", "tree_fat", "tree_cone", "tree-high-round", "tree", "plant_bushLarge", "plant_bushDetailed",
-  "plant_bush", "hedge", "flower_redA", "flower_yellowA", "flower_purpleA", "grass_large", "grass", "lily_large", "lantern", "cart", "stall-red",
-  "stall-green", "stall-bench", "banner-red", "banner-green", "windmill", "canoe"];
-let kitP: Promise<Kit> | null = null;
-export const loadKit = () => {
-  if (!kitP) {
-    kitP = Promise.resolve({} as Kit);
-  }
-  return kitP;
-};
+// No .glb assets ship with this project: the town is drawn entirely from painted canvas textures and
+// geometry (build.ts), so there is nothing to load asynchronously.
 
 // ---------------- bridge geometry constants ----------------
 const NZ = 121; // deck samples every 0.5 m from z = -30 to 30
@@ -91,7 +81,8 @@ export class World {
   private actors: Actor[] = [];
   private fxs: Fx[] = [];
   private swing: Actor;
-  private hemi: THREE.HemisphereLight; private sun: THREE.DirectionalLight; private fill: THREE.DirectionalLight;
+  private hemi: THREE.HemisphereLight; private sun: THREE.DirectionalLight;
+  private litTag = "";
   private sky: THREE.Mesh; private skyMat: THREE.ShaderMaterial;
   private fog = new THREE.Fog("#bccbec", 25, 420);
   private WU: Record<string, THREE.IUniform>;
@@ -110,7 +101,7 @@ export class World {
   private frustum = new THREE.Frustum();
   private m4 = new THREE.Matrix4(); private v = new THREE.Vector3(); private sph = new THREE.Sphere();
 
-  constructor(kit: Kit) {
+  constructor() {
     const R = this.root, M: Mats = {};
     // ---- sky + light ----
     // sky: 5 colour stops by elevation (textures.md 5.2 #5 + depth.md 2/6.5), written as tone-map-inverted linear values
@@ -139,8 +130,7 @@ export class World {
     this.sun = new THREE.DirectionalLight("#fff0d6", 2.6);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(4096, 4096);
-    this.fill = new THREE.DirectionalLight("#9fb8ff", 0.35);
-    R.add(this.hemi, this.sun, this.sun.target, this.fill, this.fill.target);
+    R.add(this.hemi, this.sun, this.sun.target);
     this.cloudMaps = { day: [0, 1, 2, 3].map((k) => cloudHD(k, LOOK.day.cloud)), golden: [0, 1, 2, 3].map((k) => cloudHD(k, LOOK.golden.cloud)) };
     for (let i = 0; i < 9; i++) {
       const a = (i / 9) * Math.PI * 2 + 0.3, d = 620 + (i % 3) * 60;
@@ -214,7 +204,7 @@ export class World {
     const sandG = new THREE.CircleGeometry(3.4, 32); sandG.rotateX(-Math.PI / 2);
     b.add(sandG, M.sand, new THREE.Matrix4().makeTranslation(PARK[0], D0 + 0.012, PARK[2]));
     b.build(R);
-    buildTown(R, kit, sightLines());
+    buildTown(R, sightLines());
 
     // water: its own mesh so the ripples can drift
     // river: depression-angle gradient + sparse marks (textures.md 5.2 #4), sun visibility captured for the bridge shadow
@@ -316,11 +306,14 @@ export class World {
     this.swing = new Actor(R, swingGeo);
     // the CAM agent's near framing objects: built once, never passed through the sight-line filter, toggled per frame
     for (const fg of FOREGROUND) {
-      const o = kitClone(kit, fg.kit, fg.s ?? 1);
+      const o = vegClone(fg.kit, fg.s ?? 1);
       if (!o) continue;
       o.position.set(...fg.pos); o.rotation.y = fg.yaw ?? 0; o.visible = false;
       this.fgs.push({ o, a: fg.a, b: fg.b }); R.add(o);
     }
+    // NOINK safety net once, after the whole static set exists: characters and effects set NOINK in their
+    // constructors (cast.ts), so nothing added later needs this traversal again.
+    noInkFallback(R);
   }
 
   /** camera-relative sun, frozen per shot: the shot's mean view direction turned by az toward screen right, lifted by el */
@@ -354,15 +347,17 @@ export class World {
     cam.layers.enable(NOINK); // sky, clouds, smoke and sun sprites live on the no-ink layer but are still rendered
     // ---- light rig (lighting.md 9.4): camera-relative sun frozen per shot, two-tone uniforms, shadow fit ----
     const K = LOOK[s.light], sunDir = this.shotSun(id, s, L);
-    this.hemi.color.set(L.sky); this.hemi.groundColor.set(L.ground); this.hemi.intensity = L.hemiI;
-    this.sun.color.set(L.sunCol); this.sun.intensity = L.sunI;
+    if (this.litTag !== s.light) { // colours/intensities only change with the light, not with the frame
+      this.litTag = s.light;
+      this.hemi.color.set(L.sky); this.hemi.groundColor.set(L.ground); this.hemi.intensity = L.hemiI;
+      this.sun.color.set(L.sunCol); this.sun.intensity = L.sunI;
+    }
     let Rr = THREE.MathUtils.clamp(dist * 1.15 + 7, 12, 95);
     if (s.light === "golden") Rr = Math.max(Rr, 30); // el 7: 2 m cards throw ~16 m shadows, houses much longer
     this.sun.position.copy(focus).addScaledVector(sunDir, 220); this.sun.target.position.copy(focus);
     const sc = this.sun.shadow.camera;
     sc.left = -Rr; sc.right = Rr; sc.top = Rr; sc.bottom = -Rr; sc.near = 20; sc.far = 480; sc.updateProjectionMatrix();
     this.sun.shadow.bias = L.bias; this.sun.shadow.normalBias = L.normalBias * (Rr / 12);
-    this.fill.intensity = 0; // not used by the two-tone shading
     TONE.uLitCol.value.set(...L.lit); TONE.uShadeCol.value.set(...L.shade); TONE.uShadeLift.value.set(...L.lift);
     TONE.uLambert.value = L.lambert; TONE.uSideK.value = L.sideK; TONE.uTerm.value = L.term; TONE.uBounce.value.set(...LOOK[s.light].bounce); TONE.uSat.value = LOOK[s.light].sat;
     CHAR.uCharTint.value.set(...L.charTint); CHAR.uCharShade.value = L.charShade; CHAR.uGrad.value = L.charGrad;

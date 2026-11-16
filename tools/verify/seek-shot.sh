@@ -5,8 +5,8 @@
 # every shot lands on a deterministic still — the web parallel of pinning a video frame.
 #
 # Usage:
-#   scripts/seek-shot.sh anim.html 0 1.5 3      # screenshot at t=0,1.5,3 seconds
-#   scripts/seek-shot.sh anim.html              # defaults to 0, 1.5, 3
+#   tools/verify/seek-shot.sh anim.html 0 1.5 3      # screenshot at t=0,1.5,3 seconds
+#   tools/verify/seek-shot.sh anim.html              # defaults to 0, 1.5, 3
 # Output: frame-<t>.png in the current directory.
 # Needs: npx (Playwright auto-fetches Chromium on first run: `npx playwright install chromium`).
 set -euo pipefail
@@ -18,4 +18,4 @@ for t in "${times[@]}"; do
   npx -y playwright screenshot --wait-for-timeout=600 "file://${abs}?t=${t}" "$out" >/dev/null 2>&1
   echo "  ✓ t=${t}s → $out"
 done
-echo "  → tile them: scripts/contact-sheet.sh sheet.png frame-*.png"
+echo "  → tile them: tools/verify/contact-sheet.sh sheet.png frame-*.png"

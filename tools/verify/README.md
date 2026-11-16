@@ -1,4 +1,4 @@
-# `scripts/` — verify-loop toolkit
+# `tools/verify/` — verify-loop toolkit
 
 Deterministic helpers the agent **calls** instead of hand-rolling, to close every skill's
 *deliver-and-verify* loop: freeze a moment, see start/mid/end at a glance, and assert the
@@ -14,25 +14,25 @@ encoded file's real spec. Small, dependency-light, tier-matched.
 
 **Light — standalone HTML** (`?t=N` harness): freeze, shoot, tile.
 ```bash
-scripts/seek-shot.sh anim.html 0 1.5 3        # → frame-0.png frame-1.5.png frame-3.png
-scripts/contact-sheet.sh sheet.png frame-*.png
+tools/verify/seek-shot.sh anim.html 0 1.5 3        # → frame-0.png frame-1.5.png frame-3.png
+tools/verify/contact-sheet.sh sheet.png frame-*.png
 # inspect sheet.png: matches the brief? clipped text / off-canvas / FOUC?
 ```
 
 **Heavy — Remotion**: render stills with the *real* shipped props, tile, then assert the MP4.
 ```bash
-npx remotion still Short out/f-hook.png --frame=10 --props='{...}'
-npx remotion still Short out/f-mid.png  --frame=N  --props='{...}'
-npx remotion still Short out/f-end.png  --frame=L  --props='{...}'
-scripts/contact-sheet.sh sheet.png out/f-hook.png out/f-mid.png out/f-end.png
-npx remotion render Short out/short.mp4 --props='{...}'
-scripts/probe-mp4.sh out/short.mp4 1080x1920 30      # vertical short contract
+npx remotion still src/index.ts RicksClipsFull out/f-hook.png --frame=10
+npx remotion still src/index.ts RicksClipsFull out/f-mid.png  --frame=900
+npx remotion still src/index.ts RicksClipsFull out/f-end.png  --frame=1950
+tools/verify/contact-sheet.sh sheet.png out/f-hook.png out/f-mid.png out/f-end.png
+npx remotion render src/index.ts RicksClipsFull out/short.mp4
+tools/verify/probe-mp4.sh out/short.mp4 1080x1920 30      # vertical short contract
 ```
 
 **Heavy — Manim**: save the last frame (`-s`) / a range (`-n a,b`), tile, assert.
 ```bash
 manim -s -ql scene.py MyScene                        # media/images/.../MyScene.png
-scripts/probe-mp4.sh media/videos/scene/480p15/MyScene.mp4
+tools/verify/probe-mp4.sh media/videos/scene/480p15/MyScene.mp4
 ```
 
 ## Requirements

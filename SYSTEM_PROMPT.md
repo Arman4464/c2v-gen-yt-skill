@@ -25,8 +25,12 @@ Every video must strictly follow this visual formula:
    - Ease-out bursts: fast start decaying smoothly into holds with subtle creeping drift.
    - Flash transitions (3-4 frame white flash) for punchy scene resets.
 4. **Captions**:
-   - Rapid phrase/word-by-word pop-up captions placed lower-middle (bottom: 260px).
-   - Bold uppercase sans-serif with subtle background capsule and bright yellow/gold (`#fbbf24`) keyword highlights.
+   - Rapid phrase/word-by-word pop-up captions placed in the mid-frame safe area (`bottom: 520px` on a
+     1080x1920 frame — above the YouTube Shorts title / channel name / description / action rail, which
+     cover roughly the bottom 350 px).
+   - Bold uppercase sans-serif with **no box, no scrim, no blur**: the caption sits directly on the scene,
+     kept legible by a dark text rim (multi-offset shadow) plus a soft drop shadow.
+   - Bright yellow/gold (`#fbbf24`) keyword highlights against white text.
 5. **Voiceover & Audio**:
    - Spoken narrative delivered via Gemini TTS (`scripts/gemini_tts.py` with `Puck` or `Charon`).
    - Pacing: Fast, conversational, ~3.7 words per second.
@@ -52,11 +56,14 @@ Probe duration:
 ```bash
 python -c "import wave; f=wave.open('public/bridge_voiceover.wav'); print(round(f.getnframes()/f.getframerate()*30))"
 ```
+Set `TOTAL` in `src/bridge/story.ts` to that frame count (the shot table's last boundary; `Captions.tsx` ends its last
+line on `TOTAL`). `Root.tsx` extends the composition if the WAV turns out longer, but the shot cut points still have
+to be re-timed by hand.
 
 ### STAGE 3: CHOREOGRAPHY & THREE.JS SCENE ASSEMBLY
-1. Define the shot timeline in `story.ts` mapping frame ranges to:
-   - Camera keyframes (`camFromKeys`).
-   - Actor positions, outfits, arm poses, and facial expressions (`actorsAt`).
+1. Define the shot timeline in `story.ts` (`SHOTS`) mapping frame ranges to:
+   - Camera keyframes (`CAMS` / `camAt`).
+   - Actor positions, outfits, arm poses, and facial expressions (`stage` in `cast.ts`).
    - World set piece triggers (doors opening, collapses, props).
 2. Wire up `<ThreeCanvas>` with `BridgeShort` / `Inner` in `Bridge.tsx`.
 3. Add `<Audio src={staticFile("bridge_voiceover.wav")} />` and `<Captions />`.
@@ -64,14 +71,22 @@ python -c "import wave; f=wave.open('public/bridge_voiceover.wav'); print(round(
 ### STAGE 4: DELIVER-AND-VERIFY
 Render stills at shot midpoints to verify lighting, depth-of-field, character card poses, and captions:
 ```bash
-npx remotion still src/index.ts RicksClipsDemo out/preview.png --frame 60
+npx remotion still src/index.ts RicksClipsShowcase out/preview.png --frame 60
+npx remotion still src/index.ts RicksClipsFull out/preview-end.png --frame 1950
 ```
+Check the still actually contains the world: a still has to show town, cast, shadows and caption. If it is an
+empty background, the post-processing composer had not been created when the frame was captured — that is the
+`Warmup` gate in `Bridge.tsx`; keep it.
 
-### STAGE 5: FINAL MP4 RENDER
-Render the finished vertical 1080x1920 @ 30 FPS MP4:
+### STAGE 5: FINAL RENDER + YOUTUBE DELIVERY
+Render the frames (resumable, lossless), then encode twice — a master and the upload file:
 ```bash
-npx remotion render src/index.ts RicksClipsDemo out/final.mp4
+powershell -ExecutionPolicy Bypass -File tools/render-frames.ps1      # -> out/frames (PNG)
+powershell -ExecutionPolicy Bypass -File tools/mux-frames.ps1         # -> out/video.mp4 (master, CRF 14)
+powershell -ExecutionPolicy Bypass -File tools/encode-youtube.ps1     # -> out/video-youtube.mp4 (upload)
 ```
+`render-frames.ps1` is chunked and skips finished chunks, so an interrupted pass costs only the chunk in
+progress. `encode-youtube.ps1` is the delivery standard for every future video — see §4.
 
 ---
 
@@ -79,4 +94,30 @@ npx remotion render src/index.ts RicksClipsDemo out/final.mp4
 - NEVER render generic dark motion-graphics kinetic typography with text boxes.
 - NEVER leave characters static without idle breathing and eye blinks.
 - NEVER use flat unshaded 3D; always apply `InkPass` and `LensBlur`.
+- NEVER put a box, capsule, scrim or backdrop blur behind a caption; captions sit on the scene.
+- NEVER place captions inside the bottom 350 px of the frame (YouTube Shorts UI lives there).
+- NEVER ship an upload file that is not produced by `tools/encode-youtube.ps1`.
+
+---
+
+## 4. DELIVERY CONTRACT (EVERY VIDEO)
+
+**Upload file** (`tools/encode-youtube.ps1`, YouTube's 1080p / 30 fps SDR recommendation):
+- MP4, H.264 **High** profile, level 4.2, `yuv420p`, progressive, constant 30 fps.
+- **1080 x 1920**, video **8 Mbps** 2-pass VBR (max 12 Mbit, 16 Mbit buffer), **closed GOP 60** (2 s).
+- **BT.709** primaries / transfer / matrix, tagged in the stream and in the x264 VUI.
+- Audio **AAC-LC, 48 kHz, stereo, 384 kbps** (`libfdk_aac`; ffmpeg's native encoder tops out lower).
+- `+faststart`, moov atom first. Frame count and duration come from the narration WAV, never hard-coded.
+
+**Master** (`tools/mux-frames.ps1`): same PNG frames, CRF 14, one generation only — keep it for archival and
+for re-encoding later without a re-render.
+
+**Render environment rules** (wrong settings here yield a blank video or a 2x-slower one):
+- `Config.setChromiumOpenGlRenderer('angle')` must stay in `remotion.config.ts`. Without it headless Chrome
+  falls back to SwiftShader (CPU) and every frame takes about twice as long. Confirm with a verbose render:
+  the GL renderer string must name the real GPU (e.g. `ANGLE (NVIDIA ... Direct3D11)`).
+- Keep `setConcurrency(2)`. The pass is GPU-bound; 4 tabs measured slower (95 s vs 59 s for 12 frames).
+- Keep the `Warmup` gate in `Bridge.tsx`: the post-processing composer is created after the first frame
+  advance, so without it the first frames of every session capture empty.
+- Never commit rendered media. `out/` is gitignored; frames, master and upload file stay local.
 ```

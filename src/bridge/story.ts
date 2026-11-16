@@ -1,9 +1,13 @@
-// Timeline of the bridge short: shots timed to the the voice words (~/bridge-short/voice/words.json),
+// Timeline of the bridge short: shots timed to the voice words (the word timings are not in this repo: the shot
+// boundaries below are the authored source of truth, and Captions.tsx follows the same narration beats),
 // story physics (column position, march phase, deck bounce, collapse) and the camera grammar measured in the
 // reference study: continuous slow push-ins; symmetric ease-in-out moves ~23 f (10 in / 10 out), peak ~15 px/f at 720p;
 // big reframes are cuts; impacts are 7-frame kicks that flip sign every frame; no hand-held float.
 export const FPS = 30;
-export const TOTAL = 2025;
+/** = public/bridge_voiceover.wav (65.20 s, 24 kHz mono) at 30 fps. Keep in step with the WAV: a composition longer
+ *  than its narration plays silent frames at the end, a shorter one cuts the last line. Root.tsx extends the
+ *  composition if the WAV is ever longer than this. */
+export const TOTAL = 1956;
 export const D0 = 6.0; // bank top + deck height (m)
 export const HALF = 27; // towers at z = +-27, span 54 m
 export const FILES = [-1.65, -0.55, 0.55, 1.65];
@@ -280,12 +284,6 @@ export const camAt = (id: number, f: number): Cam => {
   const m = (3 / 640) * Math.tan((c.fov * Math.PI) / 360) * L * a; // metres at the look distance for 3 px x a
   return { ...c, look: [c.look[0] - (d[2] / h) * m, c.look[1] + 0.6 * m, c.look[2] + (d[0] / h) * m], roll: c.roll + a * 0.004 };
 };
-/** frame at which the current key's move has finished (for picking billboard views per key, not per frame) */
-export const keyEnd = (id: number, f: number) => {
-  let e = 0;
-  for (const k of CAMS[id]) if (f >= k.f) e = k.f + (k.cut ? 0 : k.dur ?? 24);
-  return Math.max(f, e);
-};
 
 // ---------------- lens: depth of field + foreground framing ----------------
 /** Lens blur per shot (thin lens). cInf = blur-disc radius in px at 1080x1920 for things at infinity; 0 = all sharp.
@@ -331,7 +329,7 @@ export const focusAt = (id: number, f: number): V3 => {
   return d.focus ? d.focus(f) : camAt(id, f).look;
 };
 
-/** near framing objects: visible while a <= f < b; kit = a GLB name accepted by build.ts prop() */
+/** near framing objects: visible while a <= f < b; kit = a vegetation name accepted by build.ts prop() */
 // pos = base point (prop()'s x, y, z: the model's base sits on y), s = height in metres (prop()'s h), yaw in radians.
 // They sit at 0.3-0.5 x the focus distance and cover 10-25 % of one frame edge, never a face; they are meant to be
 // in front of the lens, so build them outside prop()'s sight-line test.

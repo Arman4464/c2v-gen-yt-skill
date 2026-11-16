@@ -422,7 +422,6 @@ const hatOn = (p: Pen, o: Outfit, hp: P2[], H: Blob, cx: number, hc: number, lig
 };
 
 // ---------------- bodies ----------------
-export type Arms = [P2[], P2[]];
 /** held prop; for the hammer the number is the strike 0 (raised) .. 1 (struck) */
 export type Prop = null | "icecream" | "shako" | ["hammer", number];
 
@@ -786,14 +785,6 @@ export const fxSplash = (p: Pen, t: number) => {
   }
 };
 
-/** dust puff on a 300 x 300 canvas; t in 0..1 */
-export const fxPuff = (p: Pen, t: number) => {
-  for (let i = 0; i < 5; i++) {
-    const a = rad(160 + i * 55), d = 40 + 70 * t, r = (34 + 20 * (i % 2)) * (1 - 0.6 * t);
-    p.ell(150 + d * Math.cos(a), 180 + d * 0.45 * Math.sin(a), r, r * 0.8, `rgba(238,225,205,${(1 - t).toFixed(3)})`, 0);
-  }
-};
-
 /** circling stars on a 420 x 210 canvas */
 export const fxStars = (p: Pen, t: number) => {
   for (let i = 0; i < 4; i++) {
@@ -849,13 +840,6 @@ export const fxSign = (p: Pen) => {
     p.stroke([a, b], 58, "#ffffff");
     p.stroke([a, b], 42, RED);
   }
-};
-
-/** soft cartoon cloud on a 600 x 300 canvas */
-export const fxCloud = (p: Pen, seed: number) => {
-  const blobs: [number, number, number][] = [[150, 190, 80], [250, 150, 105], [360, 160, 95], [450, 195, 70], [300, 210, 90]];
-  for (const [x, y, r] of blobs) p.ell(x + ((seed * 37) % 20) - 10, y, r, r * 0.8, "#ffffff", 0);
-  p.ell(300, 235, 230, 40, "#ffffff", 0);
 };
 
 /** cast shadow on a 128 x 256 canvas: dark soft contact pool at the feet (y 205) and a softer tail that runs up the

@@ -92,24 +92,8 @@ export type GradeParams = {
 };
 
 // __GRADES__ (fitted by scripts/fit2.py, written by scripts/emit_ts.py)
-export const GRADE_DAY: GradeParams = {
-  ky: [0.0345, 0.1828, 0.3812, 0.6605, 0.8814, 0.9631, 1],   // tangents: [1.4831, 1.4038, 1.2198, 0.9867, 0.6608, 0.4346, 0.3693]
-  sat: [0.9831, 1.2727, 1.4573],
-  tintS: [-0.0291, 0.0411], tintM: [0.0376, -0.0104], tintH: [0.0144, -0.0047],
-  vig: [0.1, 0.45],
-};
-//   shadows tint: hue 20 deg, RGB offset (+16.5, -3.5, -13.8)/255
-//   mids tint: hue 230 deg, RGB offset (-4.2, -0.6, +17.8)/255
-//   highlights tint: hue 228 deg, RGB offset (-1.9, -0.1, +6.8)/255
-export const GRADE_GOLDEN: GradeParams = {
-  ky: [0.0311, 0.1877, 0.4017, 0.6754, 0.875, 0.9582, 1],   // tangents: [1.5667, 1.498, 1.2526, 0.9235, 0.6445, 0.4724, 0.4183]
-  sat: [0.8316, 0.8799, 1.7061],
-  tintS: [0.0528, 0.0004], tintM: [0.0583, -0.0003], tintH: [0, 0],
-  vig: [0.16, 0.4],
-};
-//   shadows tint: hue 246 deg, RGB offset (+0.2, -2.6, +25.0)/255
-//   mids tint: hue 245 deg, RGB offset (-0.1, -2.7, +27.6)/255
-//   highlights tint: hue 0 deg, RGB offset (+0.0, -0.0, +0.0)/255
+// The fitted presets that used to live here (GRADE_DAY / GRADE_GOLDEN) were replaced by the round-2 pair below; they
+// are removed rather than kept alongside, so there is exactly one preset per light.
 
 export class GradeEffect extends Effect {
   constructor(p: GradeParams, amount = 1) {
@@ -150,8 +134,8 @@ export class GradeEffect extends Effect {
 }
 
 /** Presets per light (plain objects: edit / re-fit freely). */
-// Round-2 re-fit on the relit world (WORLD agent, 2026-10-31). The fitted presets above brighten (they were fitted to
-// the old dark stills) and washed the new lighting out; these are gentle S-curves at full strength instead.
+// Round-2 re-fit on the relit world (WORLD agent, 2026-10-31): the earlier fitted pair brightened every frame and
+// washed the new lighting out, so these are gentle S-curves tuned at full strength instead.
 //   day: mid knot .60 for median Y' ~.57, darks pressed (.1 -> .085), a hint of violet in shadows.
 //   golden: stronger S (darks .1 -> .09, mids .5 -> .54), blue-violet shadow tint, orange highlight tint, heavier vignette.
 export const GRADE_DAY2: GradeParams = {
@@ -167,9 +151,9 @@ export const GRADE_GOLDEN2: GradeParams = {
   vig: [0.2, 0.4],
 };
 export const GRADES: Record<"day" | "golden", GradeParams> = { day: GRADE_DAY2, golden: GRADE_GOLDEN2 };
-/** One strength (0..1, the effect's `amount`) per preset, set against the NEW world (bridge_world, 2026-10-31): full-strength
- *  presets overshot (day median Y' .59-.67 vs target .571, golden .58 vs .52); day 0.65 / golden 0.45 land at
- *  .54-.62 / ~.52. Re-fit the presets (grade.md 5.C) after the merge and raise these again. */
+/** One strength (0..1, the effect's `amount`) per preset. The round-2 presets above are fitted at full strength on the
+ *  relit world, so both stay at 1: day lands at median Y' ~.57 and golden ~.52, which is the target. Lower these (and
+ *  re-check a still) only if a new preset overshoots again. */
 export const GRADE_STRENGTH: Record<"day" | "golden", number> = { day: 1, golden: 1 };
 /** Apply the preset of a light to the effect (only touches uniforms when the light changes). */
 export function gradeFor(fx: GradeEffect, light: "day" | "golden") {
