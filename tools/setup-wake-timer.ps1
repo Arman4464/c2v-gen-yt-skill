@@ -4,7 +4,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $scriptPath = Join-Path $root "tools\nightly-render.ps1"
 
 $taskName = "CartoonShortsNightlyRender"
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`""
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`"" -WorkingDirectory $root
 $trigger = New-ScheduledTaskTrigger -Daily -At 4:00am
 
 # -WakeToRun sets the motherboard ACPI Real-Time Clock (RTC) timer to wake Windows from sleep

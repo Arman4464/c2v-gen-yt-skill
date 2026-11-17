@@ -7,6 +7,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 *.tmp
+*.log
+*.log.mbtree
 
 # Rendered video files & media
 *.mp4

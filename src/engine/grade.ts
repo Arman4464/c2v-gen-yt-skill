@@ -67,6 +67,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 // BT.709 zero-luma chroma basis (sRGB-encoded units): unit Cb and unit Cr as RGB offsets with Y' unchanged
 const E_CB: [number, number, number] = [0.0, -0.18733, 1.8556];
 const E_CR: [number, number, number] = [1.5748, -0.46813, 0.0];
+export const setTintRGB = (target: Vector3, cb: number, cr: number) =>
+  target.set(cb * E_CB[0] + cr * E_CR[0], cb * E_CB[1] + cr * E_CR[1], cb * E_CB[2] + cr * E_CR[2]);
 export const tintRGB = (cb: number, cr: number) =>
   new Vector3(cb * E_CB[0] + cr * E_CR[0], cb * E_CB[1] + cr * E_CR[1], cb * E_CB[2] + cr * E_CR[2]);
 
@@ -124,9 +126,9 @@ export class GradeEffect extends Effect {
     u.get("gradeKy")!.value = r.ky.slice();
     u.get("gradeKm")!.value = monoTangents(r.ky);
     (u.get("gradeSat")!.value as Vector3).set(...r.sat);
-    u.get("gradeTintS")!.value = tintRGB(...r.tintS);
-    u.get("gradeTintM")!.value = tintRGB(...r.tintM);
-    u.get("gradeTintH")!.value = tintRGB(...r.tintH);
+    setTintRGB(u.get("gradeTintS")!.value as Vector3, r.tintS[0], r.tintS[1]);
+    setTintRGB(u.get("gradeTintM")!.value as Vector3, r.tintM[0], r.tintM[1]);
+    setTintRGB(u.get("gradeTintH")!.value as Vector3, r.tintH[0], r.tintH[1]);
     (u.get("gradeVig")!.value as Vector2).set(...r.vig);
   }
   get amount() { return this.uniforms.get("gradeAmount")!.value as number; }

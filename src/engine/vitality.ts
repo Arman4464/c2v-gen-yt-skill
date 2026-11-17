@@ -20,6 +20,8 @@ export type VitalityState = {
   lidValue: number;
   /** Recommended mouth/expression override if speaking. */
   mouthOverride?: Expr;
+  /** Secondary motion follow-through offsets (degrees). */
+  followThrough: { hatTilt: number; coatSway: number };
 };
 
 export type VitalityOptions = {
@@ -43,7 +45,7 @@ export type VitalityOptions = {
 export function proceduralBlink(frame: number, seed = 0): { isBlinking: boolean; lidValue: number } {
   // Use a pseudo-randomized cycle period around 94 frames
   const cycle = 94 + (seed % 17) * 3;
-  const cyclePos = (frame + seed * 37) % cycle;
+  const cyclePos = ((frame + seed * 37) % cycle + cycle) % cycle;
 
   if (cyclePos >= 0 && cyclePos < 4) {
     if (cyclePos === 0 || cyclePos === 3) {
@@ -141,7 +143,22 @@ export function proceduralSpeechMouth(
 }
 
 /**
- * Main vitality computation combining blinking, breathing, squash/stretch, and speech.
+ * Calculates elastic follow-through and secondary motion for accessories (hats, coat tails, ties).
+ */
+export function proceduralFollowThrough(
+  frame: number,
+  seed = 0,
+  speed = 1.0
+): { hatTilt: number; coatSway: number } {
+  const t = frame * 0.14 + seed * 1.618;
+  // Damped harmonic dual-sine wave simulating inertial lag behind body movement
+  const hatTilt = Math.sin(t) * 1.8 * speed + Math.cos(t * 0.5) * 0.8 * speed;
+  const coatSway = Math.sin(t - 0.4) * 2.4 * speed;
+  return { hatTilt, coatSway };
+}
+
+/**
+ * Main vitality computation combining blinking, breathing, squash/stretch, speech, and secondary motion.
  */
 export function getCharacterVitality(opts: VitalityOptions): VitalityState {
   const {
@@ -166,11 +183,15 @@ export function getCharacterVitality(opts: VitalityOptions): VitalityState {
   // 4. Speech Mouth
   const mouth = proceduralSpeechMouth(frame, isSpeaking, baseExpr, seed);
 
+  // 5. Follow-through secondary motion
+  const follow = proceduralFollowThrough(frame, seed, breathingAmount);
+
   return {
     yOffset: breath.yOffset,
     scaleX: breath.scaleX * shock.scaleX,
     scaleY: breath.scaleY * shock.scaleY,
     lidValue: blink.lidValue,
     mouthOverride: isSpeaking ? mouth : undefined,
+    followThrough: follow,
   };
 }

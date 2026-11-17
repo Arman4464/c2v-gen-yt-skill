@@ -7,6 +7,7 @@ export type SfxEvent = {
   frame: number;
   kind: SfxKind;
   volume?: number;
+  durationInFrames?: number;
 };
 
 export type SoundscapeProps = {
@@ -58,12 +59,28 @@ export const Soundscape: React.FC<SoundscapeProps> = ({
 }) => {
   const frame = useCurrentFrame();
 
-  // Determine if dialogue is currently active for music bed ducking
-  const isSpeaking = dialogueRanges
-    ? dialogueRanges.some((r) => frame >= r.start && frame < r.end)
-    : true; // If ranges are not specified, default to ducked subtle volume throughout
+  // Determine ducking envelope: 4-frame linear ramp around speech range boundaries
+  // to prevent digital audio DC clicks and sudden volume jumps
+  let duckFactor = 1.0;
+  if (dialogueRanges && dialogueRanges.length > 0) {
+    const RAMP = 4;
+    let maxDuck = 0.0;
+    for (const r of dialogueRanges) {
+      if (frame >= r.start && frame < r.end) {
+        maxDuck = 1.0;
+        break;
+      } else if (frame >= r.start - RAMP && frame < r.start) {
+        const rampIn = (frame - (r.start - RAMP)) / RAMP;
+        if (rampIn > maxDuck) maxDuck = rampIn;
+      } else if (frame >= r.end && frame < r.end + RAMP) {
+        const rampOut = 1.0 - (frame - r.end) / RAMP;
+        if (rampOut > maxDuck) maxDuck = rampOut;
+      }
+    }
+    duckFactor = maxDuck;
+  }
 
-  const currentMusicVol = isSpeaking ? duckedVolume : musicVolume;
+  const currentMusicVol = musicVolume + (duckedVolume - musicVolume) * duckFactor;
 
   return (
     <>
@@ -94,7 +111,7 @@ export const Soundscape: React.FC<SoundscapeProps> = ({
           <Sequence
             key={`sfx-${idx}-${event.kind}-${event.frame}`}
             from={event.frame}
-            durationInFrames={30}
+            durationInFrames={event.durationInFrames ?? 45}
           >
             <Audio
               src={staticFile(file)}

@@ -57,4 +57,15 @@ export class TemplateWorld {
   update(_frame: number) {
     // Dynamic scene elements / sun animation if needed
   }
+
+  dispose() {
+    this.ground.geometry.dispose();
+    (this.ground.material as THREE.Material).dispose();
+    this.backWall.geometry.dispose();
+    (this.backWall.material as THREE.Material).dispose();
+    this.columnL.geometry.dispose();
+    (this.columnL.material as THREE.Material).dispose();
+    this.columnR.geometry.dispose();
+    (this.columnR.material as THREE.Material).dispose();
+  }
 }

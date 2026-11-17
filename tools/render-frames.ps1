@@ -16,7 +16,8 @@ param(
   [int]$Total = 0,
   [string]$FramesDir = "",
   [string]$Log = "out\render-log.txt",
-  [string]$StopTime = "" # e.g. "07:00" cutoff to stop morning renders cleanly
+  [string]$StopTime = "", # e.g. "07:00" cutoff to stop morning renders cleanly
+  [int]$Concurrency = 2
 )
 
 $ErrorActionPreference = 'Continue'
@@ -35,11 +36,25 @@ $slug = switch -Regex ($Composition) {
 if (-not $FramesDir) { $FramesDir = "out\frames\$slug" }
 
 $ffprobe = 'node_modules\@remotion\compositor-win32-x64-msvc\ffprobe.exe'
+if (-not (Test-Path $ffprobe)) {
+  $cmdProbe = Get-Command ffprobe -ErrorAction SilentlyContinue
+  if ($cmdProbe) {
+    $ffprobe = $cmdProbe.Source
+  } else {
+    $ffprobe = $null
+  }
+}
+
 $wavPath = Join-Path $root $Wav
 if ($Total -le 0) {
-  if (Test-Path $wavPath) {
-    $dur = [double](& $ffprobe -v error -show_entries format=duration -of csv=p=0 $wavPath)
-    $Total = [math]::Ceiling($dur * 30)
+  if ((Test-Path $wavPath) -and $ffprobe) {
+    $durOutput = & $ffprobe -v error -show_entries format=duration -of csv=p=0 $wavPath
+    $dur = 0.0
+    if ($durOutput -and [double]::TryParse($durOutput, [ref]$dur)) {
+      $Total = [math]::Ceiling($dur * 30)
+    } else {
+      $Total = 1460
+    }
   } else {
     $Total = 1460
   }
@@ -57,13 +72,66 @@ function Normalize-Frames {
   }
 }
 
+function Test-PngValid([string]$p) {
+  $item = Get-Item $p -ErrorAction SilentlyContinue
+  if (-not $item -or $item.Length -lt 10240) { return $false }
+  try {
+    $fs = [System.IO.File]::Open($p, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+    if ($fs.Length -lt 12) { $fs.Dispose(); return $false }
+    $fs.Seek(-12, [System.IO.SeekOrigin]::End) | Out-Null
+    $buf = New-Object byte[] 8
+    $null = $fs.Read($buf, 0, 8)
+    $fs.Dispose()
+    # Validate PNG IEND signature bytes (0x49, 0x45, 0x4E, 0x44)
+    if ($buf[4] -eq 0x49 -and $buf[5] -eq 0x45 -and $buf[6] -eq 0x4E -and $buf[7] -eq 0x44) {
+      return $true
+    }
+    return $false
+  } catch {
+    return $false
+  }
+}
+
 function Test-Chunk($s, $e) {
   for ($i = $s; $i -le $e; $i++) {
     $f = Join-Path $frames ("element-{0:d4}.png" -f $i)
-    if (-not (Test-Path $f)) { return $false }
-    if ((Get-Item $f).Length -eq 0) { return $false }
+    if (-not (Test-PngValid $f)) { return $false }
   }
   return $true
+}
+
+$targetCutoff = $null
+if ($StopTime) {
+  try {
+    $timeParts = $StopTime.Split(':')
+    $stopHour = [int]$timeParts[0]
+    $stopMin = [int]$timeParts[1]
+    $todayCutoff = (Get-Date).Date.AddHours($stopHour).AddMinutes($stopMin)
+    if ((Get-Date) -gt $todayCutoff) {
+      $targetCutoff = $todayCutoff.AddDays(1)
+    } else {
+      $targetCutoff = $todayCutoff
+    }
+  } catch {
+    Write-Warning "Failed to parse StopTime '$StopTime'. Format should be HH:mm."
+  }
+}
+
+$gpuName = (Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name -First 1)
+if (-not $gpuName) { $gpuName = "GPU" }
+
+# Pre-render composite soundtrack (Foley SFX + music bed + voiceover) if missing
+$soundtrackPath = Join-Path $root "out\$slug\soundtrack.wav"
+if (-not (Test-Path $soundtrackPath)) {
+  Write-Host "Pre-rendering composite soundtrack for '$Composition' -> $soundtrackPath..."
+  $soundtrackDir = Split-Path -Parent $soundtrackPath
+  if (-not (Test-Path $soundtrackDir)) { New-Item -ItemType Directory -Force -Path $soundtrackDir | Out-Null }
+  & cmd /c "node_modules\.bin\remotion.cmd render src/index.ts $Composition `"$soundtrackPath`" --log=error"
+  if (Test-Path $soundtrackPath) {
+    Write-Host "Soundtrack successfully rendered: $soundtrackPath" -ForegroundColor Green
+  } else {
+    Write-Warning "Could not render soundtrack to $soundtrackPath. Mux may fall back to dry narration."
+  }
 }
 
 Add-Content $logPath ("=== run {0} composition={1} total={2} chunk={3} stopTime={4} ===" -f (Get-Date -Format s), $Composition, $Total, $Chunk, $StopTime)
@@ -74,17 +142,11 @@ for ($s = 0; $s -lt $Total; $s += $Chunk) {
   Normalize-Frames
 
   # Check if scheduled cutoff time has arrived
-  if ($StopTime) {
-    $now = Get-Date
-    $timeParts = $StopTime.Split(':')
-    $stopHour = [int]$timeParts[0]
-    $stopMin = [int]$timeParts[1]
-    if (($now.Hour -eq $stopHour -and $now.Minute -ge $stopMin) -or ($now.Hour -gt $stopHour -and $now.Hour -lt 12)) {
-      $msg = ("Reached scheduled cutoff time ({0} at {1}). Pausing cleanly. Finished chunks are safely stored." -f $StopTime, (Get-Date -Format 'HH:mm:ss'))
-      Add-Content $logPath ("=== {0} ===" -f $msg)
-      Write-Host $msg -ForegroundColor Yellow
-      break
-    }
+  if ($targetCutoff -and ((Get-Date) -ge $targetCutoff)) {
+    $msg = ("Reached scheduled cutoff time ({0} at {1}). Pausing cleanly. Finished chunks are safely stored." -f $StopTime, (Get-Date -Format 'HH:mm:ss'))
+    Add-Content $logPath ("=== {0} ===" -f $msg)
+    Write-Host $msg -ForegroundColor Yellow
+    break
   }
 
   if (Test-Chunk $s $e) {
@@ -93,11 +155,19 @@ for ($s = 0; $s -lt $Total; $s += $Chunk) {
     continue
   }
 
-  Write-Host "Rendering chunk $s-$e using GT 710 (ANGLE D3D11)..."
+  Write-Host "Rendering chunk $s-$e using $gpuName (ANGLE D3D11, ${Concurrency}x)..."
   $sw = [Diagnostics.Stopwatch]::StartNew()
-  & cmd /c "node_modules\.bin\remotion.cmd render src/index.ts $Composition `"$frames`" --sequence --image-format=png --frames=$s-$e --gl=angle --log=error 2>&1" | Out-Null
+  $renderOutput = & cmd /c "node_modules\.bin\remotion.cmd render src/index.ts $Composition `"$frames`" --sequence --image-format=png --frames=$s-$e --gl=angle --concurrency=$Concurrency --log=error 2>&1"
   $code = $LASTEXITCODE
   $sw.Stop()
+
+  if ($code -ne 0) {
+    Write-Warning "Render failed for chunk $s-$e with exit code $code"
+    if ($renderOutput) {
+      $renderOutput | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+      Add-Content $logPath ($renderOutput -join "`n")
+    }
+  }
 
   Normalize-Frames
   $has = (Get-ChildItem $frames -Filter 'element-*.png' -ErrorAction SilentlyContinue).Count

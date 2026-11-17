@@ -50,17 +50,19 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
 #if NEAR_TAPS > 0
   float M = maxCoC * s;
   vec3 fg = vec3(0.0); float fw = 0.0, cov = 0.0;
-  for (int i = 0; i < NEAR_TAPS; i++) {
-    float rr = sqrt((float(i) + 0.5) / float(NEAR_TAPS)) * M;
-    if (rr <= R) continue;                      // already covered by the disc gather
-    float a = float(i) * GOLDEN + 1.0;
-    vec2 suv = uv + vec2(cos(a), sin(a)) * rr * texelSize;
-    float ds = distAt(suv);
-    if (ds >= d0 * 0.97) continue;              // only things in front of us
-    float rs = abs(cocAt(ds, s));
-    float w = clamp(rs - rr + 0.5, 0.0, 1.0);
-    fg += texture2D(inputBuffer, suv).rgb * w; fw += w;
-    cov += w * (M * M) / max(rs * rs, 1.0);
+  if (r0 > 0.1 || R > 0.2) {
+    for (int i = 0; i < NEAR_TAPS; i++) {
+      float rr = sqrt((float(i) + 0.5) / float(NEAR_TAPS)) * M;
+      if (rr <= R) continue;                      // already covered by the disc gather
+      float a = float(i) * GOLDEN + 1.0;
+      vec2 suv = uv + vec2(cos(a), sin(a)) * rr * texelSize;
+      float ds = distAt(suv);
+      if (ds >= d0 * 0.97) continue;              // only things in front of us
+      float rs = abs(cocAt(ds, s));
+      float w = clamp(rs - rr + 0.5, 0.0, 1.0);
+      fg += texture2D(inputBuffer, suv).rgb * w; fw += w;
+      cov += w * (M * M) / max(rs * rs, 1.0);
+    }
   }
   if (fw > 0.0) col = mix(col, fg / fw, clamp(cov / float(NEAR_TAPS), 0.0, 1.0));
 #endif

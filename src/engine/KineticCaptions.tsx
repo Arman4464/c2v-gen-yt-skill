@@ -84,8 +84,11 @@ export const KineticCaptions: React.FC<KineticCaptionsProps> = ({
 
           // Check if this word is in the explicit highlight phrase
           const cleanWord = word.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-          const isManualHighlight = current.highlight &&
-            current.highlight.toUpperCase().split(/\s+/).some((h) => h.replace(/[^a-zA-Z0-9]/g, '') === cleanWord);
+          const isManualHighlight = cleanWord.length > 0 && !!current.highlight &&
+            current.highlight.toUpperCase().split(/\s+/).some((h) => {
+              const cleanH = h.replace(/[^a-zA-Z0-9]/g, '');
+              return cleanH.length > 0 && cleanH === cleanWord;
+            });
 
           // Spring bounce animation when the word becomes active
           let scale = 1.0;
@@ -117,7 +120,6 @@ export const KineticCaptions: React.FC<KineticCaptionsProps> = ({
                 color: activeColor,
                 transform: `scale(${scale}) rotate(${tilt}deg)`,
                 transformOrigin: 'center center',
-                transition: 'color 0.1s ease',
                 textShadow: isActive
                   ? `0 3px 0 #000, 3px 0 0 #000, -3px 0 0 #000, 0 -3px 0 #000,
                      2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000,

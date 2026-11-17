@@ -4,6 +4,17 @@ Curated queue of high-retention vertical story concepts designed for the 2.5D ce
 
 ---
 
+### Concept 1: The Military That Surrendered to Birds [BUILT / IN PRODUCTION]
+- **Slug:** `emu` | **Composition:** `EmuWar` (1,460 frames / 48.67s)
+- **Voiceover:** `public/emu_voiceover.wav` (synthesized via Gemini TTS, voice `Puck`)
+- **Genre:** History / Military Absurdity (The Great Australian Emu War of 1932)
+- **Hook Line:** *"In nineteen thirty-two, a modern military armed with heavy machine guns went to war against birds—and surrendered."*
+- **The Twist:** The emus split into guerrilla squads at 40 mph, outran military trucks, and forced the army into a full ceasefire after burning through ten thousand rounds.
+- **Why It Animates Well:** Lewis guns rattling on sandbags, giant 2D emus blinking without flinching, guerrilla squads kicking up dust clouds across golden wheat fields, and an emu wearing a commander's hat atop a fence.
+- **Historical Basis:** Documented history (Western Australia, 1932).
+
+---
+
 ### Concept 2: The Great Tsunami Made Entirely of Syrup [BUILT / IN PRODUCTION]
 - **Slug:** `molasses` | **Composition:** `MolassesFlood` (1,586 frames / 52.88s)
 - **Voiceover:** `public/molasses_voiceover.wav` (synthesized via Gemini TTS, voice `Puck`)

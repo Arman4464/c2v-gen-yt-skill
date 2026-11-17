@@ -18,6 +18,7 @@ export class TemplateActor {
   ctx: CanvasRenderingContext2D;
   tex: THREE.CanvasTexture;
   seed: number;
+  lastFrame = -1;
 
   constructor(parent: THREE.Object3D, seed = 1) {
     this.seed = seed;
@@ -67,6 +68,10 @@ export class TemplateActor {
     );
     this.mesh.scale.set(vitality.scaleX, vitality.scaleY, 1.0);
 
+    // If already rendered this exact frame (e.g. during warmup or multi-pass), skip texture upload
+    if (this.lastFrame === frame) return;
+    this.lastFrame = frame;
+
     // 3. Render 2D Toon Card with Procedural Blink & Mouth Flap
     this.ctx.clearRect(0, 0, 600, 1000);
     const pen = new Pen(this.ctx);
@@ -77,15 +82,23 @@ export class TemplateActor {
       expr: vitality.mouthOverride ?? (frame > 120 && frame < 240 ? 'nervous' : 'neutral'),
       blink: vitality.lidValue,
       mode: 'stand',
-      facing: 0,
-      look: 0,
+      facing: (frame > 60 && frame < 180 ? 1 : 0) as -1 | 0 | 1,
+      look: frame > 60 && frame < 180 ? 0.6 : 0,
       frame,
-      // 4. Procedural 2-Bone IK Puppet Posing
+      hatTilt: vitality.followThrough.hatTilt,
+      coatSway: vitality.followThrough.coatSway,
+      // 4. Procedural 2-Bone IK Puppet Posing & Expressive Hand Poses
       leftArm: frame >= 165 && frame <= 210 ? 'alarm' : frame > 50 && frame < 120 ? 'point' : 'akimbo',
       rightArm: frame >= 165 && frame <= 210 ? 'alarm' : frame < 45 ? 'wave' : 'idle',
     };
 
     bodyFront(pen, outfit, opts);
     this.tex.needsUpdate = true;
+  }
+
+  dispose() {
+    this.mesh.parent?.remove(this.mesh);
+    this.mat.dispose();
+    this.tex.dispose();
   }
 }

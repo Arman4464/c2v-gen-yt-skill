@@ -39,6 +39,17 @@ export function solve2BoneIK(
   bend: BendSide = 'out',
   facing: number = 1
 ): IK2BoneResult {
+  if (l1 <= 0 || l2 <= 0) {
+    return {
+      root,
+      joint: [root[0], root[1]],
+      target: [root[0], root[1]],
+      angleUpper: 0,
+      angleLower: 0,
+      reached: false,
+    };
+  }
+
   const dx = target[0] - root[0];
   const dy = target[1] - root[1];
   const dist = Math.hypot(dx, dy);
@@ -49,6 +60,16 @@ export function solve2BoneIK(
 
   // Clamp effective distance to prevent triangle inequality breakdown
   const d = Math.max(minReach + 0.001, Math.min(dist, maxReach - 0.001));
+  if (d <= 0) {
+    return {
+      root,
+      joint: [root[0], root[1]],
+      target: [root[0], root[1]],
+      angleUpper: 0,
+      angleLower: 0,
+      reached: false,
+    };
+  }
   const reached = dist <= maxReach && dist >= minReach;
 
   // Base direction angle from root to target
@@ -56,8 +77,10 @@ export function solve2BoneIK(
 
   // Law of Cosines for the upper joint angle
   // d^2 + l1^2 - l2^2 = 2 * d * l1 * cos(alpha)
-  const cosAlpha = (d * d + l1 * l1 - l2 * l2) / (2 * d * l1);
-  const alpha = Math.acos(Math.max(-1, Math.min(1, cosAlpha)));
+  const denom = 2 * d * l1;
+  const cosAlpha = denom > 0 ? (d * d + l1 * l1 - l2 * l2) / denom : 0;
+  const safeCosAlpha = Math.max(-1, Math.min(1, Number.isFinite(cosAlpha) ? cosAlpha : 0));
+  const alpha = Math.acos(safeCosAlpha);
 
   // Determine bend direction sign (+1 or -1)
   let bendSign = 1;
@@ -118,11 +141,16 @@ export interface GestureOptions {
   blend?: number; // 0..1
 }
 
+export type HandPose = 'relaxed' | 'fist' | 'point' | 'open_splayed' | 'pinch' | 'grip_prop';
+
 export interface ArmRigState {
   shoulder: Point2D;
   elbow: Point2D;
   hand: Point2D;
   isFront: boolean;
+  angleUpper: number;
+  angleLower: number;
+  pose: HandPose;
 }
 
 /**
@@ -145,6 +173,7 @@ export function computeArmGesture(
   let handTarget: Point2D;
   let bend: BendSide = 'out';
   let isFront = true;
+  let pose: HandPose = 'relaxed';
 
   switch (gesture) {
     case 'idle': {
@@ -154,8 +183,9 @@ export function computeArmGesture(
         shoulder[0] + sideSign * (torsoWidth * 0.15) + sway,
         shoulder[1] + armLen * 0.95,
       ];
-      bend = isRight ? 'out' : 'out';
+      bend = 'out';
       isFront = false;
+      pose = 'relaxed';
       break;
     }
 
@@ -171,6 +201,7 @@ export function computeArmGesture(
       }
       bend = isRight ? 'up' : 'up';
       isFront = true;
+      pose = 'point';
       break;
     }
 
@@ -183,6 +214,7 @@ export function computeArmGesture(
       ];
       bend = 'out';
       isFront = true;
+      pose = 'open_splayed';
       break;
     }
 
@@ -194,6 +226,7 @@ export function computeArmGesture(
       ];
       bend = 'out';
       isFront = true;
+      pose = 'fist';
       break;
     }
 
@@ -205,6 +238,7 @@ export function computeArmGesture(
       ];
       bend = 'down';
       isFront = true;
+      pose = 'open_splayed';
       break;
     }
 
@@ -216,6 +250,7 @@ export function computeArmGesture(
       ];
       bend = 'down';
       isFront = isRight; // one arm overlaps the other
+      pose = 'fist';
       break;
     }
 
@@ -227,6 +262,7 @@ export function computeArmGesture(
       ];
       bend = 'in';
       isFront = true;
+      pose = 'pinch';
       break;
     }
 
@@ -238,6 +274,7 @@ export function computeArmGesture(
       ];
       bend = 'in';
       isFront = true;
+      pose = 'open_splayed';
       break;
     }
 
@@ -250,6 +287,7 @@ export function computeArmGesture(
       ];
       bend = 'out';
       isFront = true;
+      pose = 'open_splayed';
       break;
     }
 
@@ -265,6 +303,7 @@ export function computeArmGesture(
       }
       bend = 'out';
       isFront = true;
+      pose = 'grip_prop';
       break;
     }
   }
@@ -275,6 +314,9 @@ export function computeArmGesture(
     elbow: ik.joint,
     hand: ik.target,
     isFront,
+    angleUpper: ik.angleUpper,
+    angleLower: ik.angleLower,
+    pose,
   };
 }
 

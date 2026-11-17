@@ -3,6 +3,7 @@ import sys
 import argparse
 import json
 import base64
+import subprocess
 import urllib.request
 from pathlib import Path
 from dotenv import load_dotenv
@@ -11,6 +12,43 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_API_KEY = os.getenv("GEMINI_API_KEY")
+
+def normalize_audio(file_path: str):
+    """Normalizes voiceover audio to standard YouTube loudness (-14 LUFS) via bundled ffmpeg."""
+    import shutil
+    cur = Path(__file__).resolve().parent
+    root = None
+    for _ in range(5):
+        if (cur / "node_modules").exists() or (cur / "package.json").exists():
+            root = cur
+            break
+        cur = cur.parent
+    if not root:
+        root = Path(__file__).resolve().parents[1]
+
+    bundled_ffmpeg = root / "node_modules" / "@remotion" / "compositor-win32-x64-msvc" / "ffmpeg.exe"
+    if bundled_ffmpeg.exists():
+        ffmpeg_exe = str(bundled_ffmpeg)
+    else:
+        ffmpeg_exe = shutil.which("ffmpeg") or "ffmpeg"
+
+    tmp_path = str(file_path) + ".tmp.wav"
+    cmd = [
+        ffmpeg_exe, "-y", "-hide_banner", "-loglevel", "error",
+        "-i", str(file_path),
+        "-af", "loudnorm=I=-14:TP=-1.5:LRA=7",
+        "-ar", "44100",
+        tmp_path
+    ]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode == 0 and os.path.exists(tmp_path):
+            os.replace(tmp_path, file_path)
+            print(f"Normalized audio to -14 LUFS (EBU R128 standard): {file_path}")
+        elif os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    except Exception as ex:
+        print(f"Audio normalization skipped (warning): {ex}")
 
 def generate_tts(text: str, output_path: str, voice: str = "Puck", model: str = "gemini-3.8-flash-tts", api_key: str = None):
     key = api_key or DEFAULT_API_KEY
@@ -34,7 +72,10 @@ def generate_tts(text: str, output_path: str, voice: str = "Puck", model: str = 
     req = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"}
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": key,
+        }
     )
 
     try:
@@ -60,6 +101,17 @@ def generate_tts(text: str, output_path: str, voice: str = "Puck", model: str = 
             with open(out, "wb") as f:
                 f.write(audio_bytes)
             print(f"Successfully generated TTS audio ({len(audio_bytes)} bytes) -> {out}")
+            normalize_audio(str(out))
+            try:
+                import wave, math
+                with wave.open(str(out), "rb") as wf:
+                    n_frames = wf.getnframes()
+                    rate = wf.getframerate()
+                    duration_sec = n_frames / float(rate)
+                    duration_frames = math.ceil(duration_sec * 30.0)
+                    print(f"Timeline Metadata: {duration_sec:.2f}s -> EXACTLY {duration_frames} frames @ 30fps (set TOTAL = {duration_frames} in story.ts)")
+            except Exception as e:
+                pass
             return str(out)
 
     except urllib.error.HTTPError as e:

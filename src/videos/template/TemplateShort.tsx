@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import { useCurrentFrame } from 'remotion';
+import { AbsoluteFill, useCurrentFrame } from 'remotion';
 import { ThreeCanvas } from '@remotion/three';
 import { useThree } from '@react-three/fiber';
 import { EffectComposer } from '@react-three/postprocessing';
 import { TemplateWorld } from './world';
 import { TemplateActor } from './cast';
 import { getCameraAt, SUBTITLES, SFX_EVENTS, TOTAL_FRAMES } from './story';
-import { LookMatchPipeline } from '../../engine/pipeline';
+import { LookMatchPipeline, Warmup } from '../../engine/pipeline';
 import { clampActorToFrustum } from '../../engine/camera';
 import { FloorPoolManager } from '../../engine/floorpool';
 import { Soundscape } from '../../engine/audio';
@@ -31,7 +31,9 @@ const SceneContainer: React.FC = () => {
   useEffect(() => () => {
     fx.dispose();
     pools.dispose();
-  }, [fx, pools]);
+    actor.dispose();
+    world.dispose();
+  }, [fx, pools, actor, world]);
 
   // Update scene & camera per frame
   const camInfo = getCameraAt(frame);
@@ -59,6 +61,7 @@ const SceneContainer: React.FC = () => {
 
   return (
     <>
+      <Warmup />
       <primitive object={world.scene} />
       <EffectComposer multisampling={0}>
         <primitive object={fx.ink} dispose={null} />
@@ -75,7 +78,7 @@ const SceneContainer: React.FC = () => {
 
 export const TemplateShort: React.FC = () => {
   return (
-    <div style={{ flex: 1, backgroundColor: '#000000', position: 'relative' }}>
+    <AbsoluteFill style={{ backgroundColor: '#000000' }}>
       {/* 1. 3D Cel-Shaded World with Procedural Actors & Line Boil */}
       <ThreeCanvas
         width={1080}
@@ -99,6 +102,6 @@ export const TemplateShort: React.FC = () => {
         bottom={380}
         highlightColor="#FFE600"
       />
-    </div>
+    </AbsoluteFill>
   );
 };

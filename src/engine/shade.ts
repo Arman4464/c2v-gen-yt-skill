@@ -9,6 +9,8 @@ export const TONE = {
   uShadeLift: { value: new THREE.Vector3() }, uLambert: { value: 0.35 }, uSideK: { value: 0.84 }, uTerm: { value: 0.2 },
   uBounce: { value: new THREE.Vector3() }, // warm bounce on shaded faces turned to the camera (golden only; day = 0)
   uSat: { value: 1 }, // world albedo saturation around its luminance (characters are not twoTone, so unaffected)
+  uRimCol: { value: new THREE.Vector3(0.35, 0.4, 0.5) }, // three-point cel-shaded rim/kick light
+  uRimPower: { value: 3.0 },
 };
 /** character-card uniforms (lighting.md 9.2 cardShade); world.ts keeps them in sync with LIGHTS for cardshade.ts */
 export const CHAR = {
@@ -35,13 +37,21 @@ const TWO_TONE = /* glsl */ `
   vec3 lit = uLitCol * mix( 1.0, ndl, uLambert );                             // keep some cosine modelling
   float facing = max( dot( geometryNormal, geometryViewDir ), 0.0 );        // 1 = faces the lens
   vec3 alb = max( mix( vec3( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) ), diffuseColor.rgb, uSat ), 0.0 );
+
+  // Three-point cel-shaded rim / kick lighting on silhouettes
+  float rimDot = clamp( 1.0 - dot( geometryNormal, geometryViewDir ), 0.0, 1.0 );
+  float rimFacing = smoothstep( -0.2, 0.5, dot( -sunV, geometryViewDir ) );
+  float rim = pow( rimDot, uRimPower ) * rimFacing;
+  vec3 rimCol = alb * uRimCol * rim;
+
   reflectedLight.directDiffuse = alb * ( mix( uShadeCol, lit, sunTerm ) * skyK + uBounce * facing * clamp( 1.0 - dot( geometryNormal, upV ), 0.0, 1.0 ) * ( 1.0 - sunTerm ) )
-    + uShadeLift * LIFT_K * ( 1.0 - sunTerm );
+    + uShadeLift * LIFT_K * ( 1.0 - sunTerm )
+    + rimCol;
   reflectedLight.indirectDiffuse = vec3( 0.0 );                               // hemisphere/fill no longer used here
 }
 #endif
 `;
-const DECL = "#include <common>\nuniform vec3 uLitCol; uniform vec3 uShadeCol; uniform vec3 uShadeLift; uniform float uLambert; uniform float uSideK; uniform float uTerm; uniform vec3 uBounce; uniform float uSat;";
+const DECL = "#include <common>\nuniform vec3 uLitCol; uniform vec3 uShadeCol; uniform vec3 uShadeLift; uniform float uLambert; uniform float uSideK; uniform float uTerm; uniform vec3 uBounce; uniform float uSat; uniform vec3 uRimCol; uniform float uRimPower;";
 
 /** Lambert (or Phong: its specular term is kept, masked by the shadow) -> two-tone. Call once per material. */
 export function twoTone<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(m: T, liftK = 1): T {
@@ -67,11 +77,21 @@ const neutral = (c: number[]) => {
   const d = 1 - S, np = 1 - (d * d) / (peak + d - S), g = 1 - 1 / (0.15 * (peak - np) + 1);
   return v.map((k) => (k * np) / peak * (1 - g) + np * g);
 };
+const UNTONE_CACHE = new Map<string, THREE.Color>();
+
 /** linear input that the Neutral tone map turns into the given on-screen colour (hex or THREE.Color, sRGB target) */
 export const untone = (target: THREE.ColorRepresentation, out = new THREE.Color()) => {
+  const key = typeof target === 'number' || typeof target === 'string' 
+    ? String(target) 
+    : (target instanceof THREE.Color ? `${target.r.toFixed(4)},${target.g.toFixed(4)},${target.b.toFixed(4)}` : JSON.stringify(target));
+  const cached = UNTONE_CACHE.get(key);
+  if (cached) return out.copy(cached);
+
   const t = new THREE.Color(target); // linear working space
   const tt = [t.r, t.g, t.b].map((k) => Math.min(k, 0.985));
   let c = tt.slice();
   for (let i = 0; i < 60; i++) { const y = neutral(c); c = c.map((k, j) => Math.max(0, k + (tt[j] - y[j]))); }
-  return out.setRGB(c[0], c[1], c[2]);
+  out.setRGB(c[0], c[1], c[2]);
+  UNTONE_CACHE.set(key, out.clone());
+  return out;
 };

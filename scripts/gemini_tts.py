@@ -15,9 +15,22 @@ DEFAULT_API_KEY = os.getenv("GEMINI_API_KEY")
 
 def normalize_audio(file_path: str):
     """Normalizes voiceover audio to standard YouTube loudness (-14 LUFS) via bundled ffmpeg."""
-    root = Path(__file__).resolve().parent.parent
+    import shutil
+    cur = Path(__file__).resolve().parent
+    root = None
+    for _ in range(5):
+        if (cur / "node_modules").exists() or (cur / "package.json").exists():
+            root = cur
+            break
+        cur = cur.parent
+    if not root:
+        root = Path(__file__).resolve().parents[1]
+
     bundled_ffmpeg = root / "node_modules" / "@remotion" / "compositor-win32-x64-msvc" / "ffmpeg.exe"
-    ffmpeg_exe = str(bundled_ffmpeg) if bundled_ffmpeg.exists() else "ffmpeg"
+    if bundled_ffmpeg.exists():
+        ffmpeg_exe = str(bundled_ffmpeg)
+    else:
+        ffmpeg_exe = shutil.which("ffmpeg") or "ffmpeg"
 
     tmp_path = str(file_path) + ".tmp.wav"
     cmd = [
@@ -59,7 +72,10 @@ def generate_tts(text: str, output_path: str, voice: str = "Puck", model: str = 
     req = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"}
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": key,
+        }
     )
 
     try:
@@ -86,6 +102,16 @@ def generate_tts(text: str, output_path: str, voice: str = "Puck", model: str = 
                 f.write(audio_bytes)
             print(f"Successfully generated TTS audio ({len(audio_bytes)} bytes) -> {out}")
             normalize_audio(str(out))
+            try:
+                import wave, math
+                with wave.open(str(out), "rb") as wf:
+                    n_frames = wf.getnframes()
+                    rate = wf.getframerate()
+                    duration_sec = n_frames / float(rate)
+                    duration_frames = math.ceil(duration_sec * 30.0)
+                    print(f"Timeline Metadata: {duration_sec:.2f}s -> EXACTLY {duration_frames} frames @ 30fps (set TOTAL = {duration_frames} in story.ts)")
+            except Exception as e:
+                pass
             return str(out)
 
     except urllib.error.HTTPError as e:

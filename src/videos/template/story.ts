@@ -1,6 +1,6 @@
 import { CaptionSegment } from '../../engine/KineticCaptions';
 import { SfxEvent } from '../../engine/audio';
-import { getSnapZoom, getLoopBlend, blendLoopVector } from '../../engine/retention';
+import { getSnapZoom, getLoopBlend, blendLoopVector, getHandheldDrift } from '../../engine/retention';
 
 export const FPS = 30;
 export const TOTAL_FRAMES = 360; // 12-second showcase template
@@ -94,13 +94,22 @@ export function getCameraAt(frame: number): {
   const snap = getSnapZoom(frame, 75, 0.06);
   const fov = shot.fov * snap.fovScale;
 
-  // 2. Apply infinite loop match blend in the final 15 frames
+  // 2. Apply organic multi-octave handheld camera drift
+  const drift = getHandheldDrift(frame, 1.0);
+  const driftedPos: [number, number, number] = [
+    pos[0] + drift.posOffset[0],
+    pos[1] + drift.posOffset[1],
+    pos[2] + drift.posOffset[2],
+  ];
+
+  // 3. Apply infinite loop match blend in the final 15 frames
   const loopFactor = getLoopBlend(frame, TOTAL_FRAMES, 15);
-  const finalPos = blendLoopVector(pos, SHOTS[0].camStart, loopFactor);
+  const finalPos = blendLoopVector(driftedPos, SHOTS[0].camStart, loopFactor);
+  const finalLook = blendLoopVector(look, SHOTS[0].lookStart, loopFactor);
 
   return {
     pos: finalPos,
-    look,
+    look: finalLook,
     fov,
     focalDist: shot.focalDist,
   };

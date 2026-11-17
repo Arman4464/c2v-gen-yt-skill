@@ -1,6 +1,6 @@
 import React from 'react';
-import { Composition, staticFile } from 'remotion';
-import { getAudioDurationInSeconds } from '@remotion/media-utils';
+import { Composition } from 'remotion';
+import { getExactAudioFrames, FPS } from './engine/timeline';
 import { BridgeShort, BRIDGE_FRAMES } from './videos/demo/Bridge';
 import { DemoVideo, DEMO_FRAMES } from './Composition';
 import { EmuWarShort, EMU_FRAMES } from './videos/emu/EmuWar';
@@ -8,12 +8,13 @@ import { MolassesShort, MOLASSES_FRAMES } from './videos/molasses/MolassesFlood'
 import { MonaLisaShort, MONALISA_FRAMES } from './videos/monalisa/MonaLisaHeist';
 import { TemplateShort, TEMPLATE_FRAMES } from './videos/template/TemplateShort';
 
-const FPS = 30;
 const WIDTH = 1080;
 const HEIGHT = 1920;
 
 /** narration length in frames, probed from the WAV so the composition can never drift from the voiceover */
-const narrationFrames = async (wav: string) => Math.ceil((await getAudioDurationInSeconds(staticFile(wav))) * FPS);
+const narrationFrames = async (wav: string) => {
+  return await getExactAudioFrames(wav, 0, FPS);
+};
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -49,7 +50,7 @@ export const RemotionRoot: React.FC = () => {
         fps={FPS}
         width={WIDTH}
         height={HEIGHT}
-        calculateMetadata={async () => ({ durationInFrames: await narrationFrames('demo_voiceover.wav') })}
+        calculateMetadata={async () => ({ durationInFrames: Math.max(DEMO_FRAMES, await narrationFrames('demo_voiceover.wav')) })}
       />
 
       {/* The Great Emu War of 1932: 10-shot vertical cartoon story short */}
